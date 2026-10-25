@@ -207,16 +207,22 @@ export function generateConciseDakshinReply(query: string, lang: SupportedLangua
     if (q.includes("sleep") || q.includes("నిద్ర") || q.includes("పడుకో")) {
       return "రాత్రి 10:30 కల్లా పడుకుని 7 నుండి 8 గంటలు ప్రశాంతంగా నిద్రపోండి. సరైన నిద్ర లేకపోతే ఒత్తిడి హార్మోన్ పెరిగి పొట్టలో కొవ్వు పేరుకుపోతుంది. పడుకునే 30 నిమిషాల ముందే మొబైల్ పక్కన పెట్టండి!";
     }
-    return "సమతుల్య ఆహారం, ప్రతిరోజూ 8,000-10,000 అడుగుల నడక, 3.5 లీటర్ల నీరు మరియు 8 గంటల ప్రశాంత నిద్ర మీ ఆరోగ్యాన్ని సంపూర్ణంగా మారుస్తాయి. మీ సందేహాలను మైక్ ఆన్ చేసి అడగండి!";
+    if (q.includes("price") || q.includes("cost") || q.includes("ధర") || q.includes("ఖరీదు") || q.includes("ఫీజు") || q.includes("డబ్బు") || q.includes("ఉచితం") || q.includes("ప్రైస్") || q.includes("ప్లాన్")) {
+      return "యాక్టివ్‌లైఫ్ వెల్నెస్ ప్రాథమిక BMI విశ్లేషణ మరియు నా AI హెల్త్ కోచింగ్ పూర్తిగా ఉచితం! మీకు ప్రత్యేకమైన న్యూట్రిషన్ ప్లాన్ లేదా డైట్ గైడెన్స్ కావాలంటే మా వెల్నెస్ కోచ్‌లు మీకు వివరాలు అందిస్తారు.";
+    }
+    return "సమతుల్య ఆహారం, ప్రతిరోజూ 8,000-10,000 అడుగుల నడక, 3.5 లీటర్ల నీరు మరియు 8 గంటల ప్రశాంత నిద్ర మీ ఆరోగ్యాన్ని సంపూర్ణంగా మారుస్తాయి. మీ సందేహాలను అడగండి!";
   }
 
   // Hindi (हिन्दी)
   if (lang === "hi") {
     if (q.includes("नमस्ते") || q.includes("हेलो") || q.includes("कौन") || q.includes("कैसे हो") || q.includes("hello") || q.includes("hi")) {
-      return "नमस्ते! मैं दक्षिण हूँ, आपका पर्सनल AI हेल्थ असिस्टेंट। आपकी BMI रिपोर्ट, वॉक, डाइट, पानी या नींद को लेकर जो भी सवाल हो, माइक ऑन करके मुझसे सीधे पूछें!";
+      return "नमस्ते! मैं दक्षिण हूँ, आपकी पर्सनल AI हेल्थ असिस्टेंट। आपकी BMI रिपोर्ट, वॉक, डाइट, पानी या नींद को लेकर जो भी सवाल हो, मुझसे सीधे पूछें!";
     }
     if (q.includes("धन्यवाद") || q.includes("शुक्रिया") || q.includes("thank")) {
       return "आपका स्वागत है! स्वस्थ जीवनशैली बनाए रखें। कुछ और पूछना हो तो माइक ऑन करके पूछ सकते हैं।";
+    }
+    if (q.includes("price") || q.includes("cost") || q.includes("प्राइस") || q.includes("दाम") || q.includes("कीमत") || q.includes("फीस") || q.includes("रुपये") || q.includes("पैसे") || q.includes("फ्री") || q.includes("प्लान")) {
+      return "एक्टिवलाइफ वेलनेस पर बुनियादी BMI रिपोर्ट एनालिसिस और मेरी AI हेल्थ सहायता बिल्कुल मुफ्त है! अगर आप व्यक्तिगत डाइट और न्यूट्रिशन क्लब कोचिंग प्लान चाहते हैं, तो हमारे एक्सपर्ट कोच से संपर्क करें।";
     }
     if (q.includes("report") || q.includes("रिपोर्ट") || q.includes("समझाएं") || q.includes("परिणाम") || q.includes("bmi") || q.includes("बीएमआई")) {
       return "आपकी BMI रिपोर्ट के अनुसार आपका BMI 35.1 और विसरल फैट 15 है, जो सुरक्षित स्तर 9 से अधिक है। स्वास्थ्य सुधारने के लिए रोजाना 8,000 से 10,000 कदम चलें, चीनी छोड़ें और 3.5 लीटर पानी पिएं!";
@@ -236,15 +242,18 @@ export function generateConciseDakshinReply(query: string, lang: SupportedLangua
     if (q.includes("sleep") || q.includes("नींद") || q.includes("सोना")) {
       return "रात 10:30 तक सोएं और 7 से 8 घंटे की गहरी नींद लें। नींद की कमी से तनाव हार्मोन बढ़ता है जो पेट की चर्बी बढ़ाता है। सोने से पहले मोबाइल स्क्रीन बंद रखें!";
     }
-    return "संतुलित आहार, रोजाना 8,000 से 10,000 कदम वॉक, 3.5 लीटर पानी और 8 घंटे की नींद आपके स्वास्थ्य को तेजी से दुरुस्त करेगी। माइक ऑन करके कोई भी सवाल पूछें!";
+    return "संतुलित आहार, रोजाना 8,000 से 10,000 कदम वॉक, 3.5 लीटर पानी और 8 घंटे की नींद आपके स्वास्थ्य को तेजी से दुरुस्त करेगी। कोई भी सवाल पूछें!";
   }
 
   // English (Default) - Warm, conversational & concise
   if (q.includes("hello") || q.includes("hi") || q.includes("hey") || q.includes("who are you") || q.includes("how are you")) {
-    return "Hello! I am Dakshin, your AI health coach. Turn on the mic to ask me anything about your BMI report, daily steps, healthy nutrition, hydration, or sleep habits!";
+    return "Hello! I am Dakshin, your AI health coach. Ask me anything about your BMI report, daily steps, healthy nutrition, hydration, or sleep habits!";
   }
   if (q.includes("thank") || q.includes("bye") || q.includes("good night")) {
-    return "You're very welcome! Stay committed to your wellness routine. Whenever you have another question, just turn on the microphone and speak with me!";
+    return "You're very welcome! Stay committed to your wellness routine. Whenever you have another question, just tap to talk with me!";
+  }
+  if (q.includes("price") || q.includes("cost") || q.includes("fee") || q.includes("charge") || q.includes("free") || q.includes("money") || q.includes("package") || q.includes("plan")) {
+    return "ActiveLife Wellness basic report analysis and my AI health coaching are completely free! If you would like a personalized nutrition club diet or one-on-one fitness coaching, our wellness coaches can share package details.";
   }
   if (q.includes("report") || q.includes("explain") || q.includes("result") || q.includes("summary") || q.includes("bmi")) {
     return "I have reviewed your BMI report. Your BMI is 35.1 and visceral fat is at 15 against the recommended limit of under 9. To reverse this, focus on 8,000 to 10,000 daily steps, high protein and fiber intake, 3.5 liters of water, and 8 hours of sleep!";
@@ -264,5 +273,5 @@ export function generateConciseDakshinReply(query: string, lang: SupportedLangua
   if (q.includes("sleep") || q.includes("rest") || q.includes("bed") || q.includes("insomnia")) {
     return "Aim for 7 to 8 hours of deep sleep by 10:30 PM. Poor sleep increases cortisol, which triggers stubborn visceral fat storage around the organs. Keep your room dark and cool, and disconnect from screens 30 minutes before bed.";
   }
-  return "Consistency in daily movement (8,000-10,000 steps), balanced protein and fiber nutrition, 3.5 liters of hydration, and 8 hours of sleep will optimize your body composition. Turn on the mic or type to ask me anything!";
+  return "Consistency in daily movement (8,000-10,000 steps), balanced protein and fiber nutrition, 3.5 liters of hydration, and 8 hours of sleep will optimize your body composition. Tap the mic or type to ask me anything!";
 }

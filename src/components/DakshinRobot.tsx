@@ -157,6 +157,116 @@ const HolographicSoundWave: React.FC<{ isSpeaking: boolean; isListening: boolean
   );
 };
 
+/**
+ * Real-time Phonetic Telugu Transliteration
+ * Converts Telugu script (Unicode \u0C00-\u0C7F) into smooth, phonetic Roman text.
+ * When a browser/OS (e.g. Windows Chrome) lacks an offline native Telugu TTS voice,
+ * this allows an Indian English female voice (Heera/Neerja/Google) to speak authentic,
+ * clearly understandable Telugu aloud instead of remaining silent or erroring out.
+ */
+export function transliterateTeluguToRoman(text: string): string {
+  if (!text || !/[\u0C00-\u0C7F]/.test(text)) return text;
+
+  const VOWELS: Record<string, string> = {
+    "\u0C05": "a", "\u0C06": "aa", "\u0C07": "i", "\u0C08": "ee",
+    "\u0C09": "u", "\u0C0A": "oo", "\u0C0B": "ru", "\u0C0E": "e",
+    "\u0C0F": "ae", "\u0C10": "ai", "\u0C12": "o", "\u0C13": "o",
+    "\u0C14": "au"
+  };
+
+  const CONSONANTS: Record<string, string> = {
+    "\u0C15": "k", "\u0C16": "kh", "\u0C17": "g", "\u0C18": "gh", "\u0C19": "ng",
+    "\u0C1A": "ch", "\u0C1B": "chh", "\u0C1C": "j", "\u0C1D": "jh", "\u0C1E": "ny",
+    "\u0C1F": "t", "\u0C20": "th", "\u0C21": "d", "\u0C22": "dh", "\u0C23": "n",
+    "\u0C24": "th", "\u0C25": "th", "\u0C26": "d", "\u0C27": "dh", "\u0C28": "n",
+    "\u0C2A": "p", "\u0C2B": "ph", "\u0C2C": "b", "\u0C2D": "bh", "\u0C2E": "m",
+    "\u0C2F": "y", "\u0C30": "r", "\u0C31": "r", "\u0C32": "l", "\u0C33": "l",
+    "\u0C35": "v", "\u0C36": "sh", "\u0C37": "sh", "\u0C38": "s", "\u0C39": "h"
+  };
+
+  const MATRAS: Record<string, string> = {
+    "\u0C3E": "aa", "\u0C3F": "i", "\u0C40": "ee", "\u0C41": "u", "\u0C42": "oo",
+    "\u0C43": "ru", "\u0C46": "e", "\u0C47": "ae", "\u0C48": "ai", "\u0C4A": "o",
+    "\u0C4B": "o", "\u0C4C": "au"
+  };
+
+  let out = "";
+  const chars = Array.from(text);
+  for (let i = 0; i < chars.length; i++) {
+    const c = chars[i];
+    const next = chars[i + 1];
+
+    if (VOWELS[c]) {
+      out += VOWELS[c];
+    } else if (CONSONANTS[c]) {
+      const base = CONSONANTS[c];
+      if (next === "\u0C4D") {
+        // Virama (halant) - consonant only, no inherent vowel
+        out += base;
+        i++; // skip virama
+      } else if (next && MATRAS[next]) {
+        // Consonant with vowel sign
+        out += base + MATRAS[next];
+        i++; // skip matra
+      } else {
+        // Consonant with inherent 'a' sound
+        out += base + "a";
+      }
+    } else if (c === "\u0C02") {
+      out += "m";
+    } else if (c === "\u0C03") {
+      out += "h";
+    } else {
+      out += c;
+    }
+  }
+  return out;
+}
+
+// Explicit check for male voices to disqualify
+const isMaleVoice = (v: SpeechSynthesisVoice): boolean => {
+  const n = v.name.toLowerCase();
+  return (
+    n.includes("david") ||
+    n.includes("mark") ||
+    n.includes("george") ||
+    n.includes("ravi") ||
+    n.includes("mohan") ||
+    n.includes("madhur") ||
+    n.includes("guy") ||
+    n.includes("male") ||
+    n.includes("stefan") ||
+    n.includes("richard") ||
+    n.includes("james") ||
+    n.includes("sean")
+  );
+};
+
+const isConfirmedFemaleVoice = (v: SpeechSynthesisVoice): boolean => {
+  const n = v.name.toLowerCase();
+  return (
+    n.includes("female") ||
+    n.includes("woman") ||
+    n.includes("zira") ||
+    n.includes("jenny") ||
+    n.includes("aria") ||
+    n.includes("samantha") ||
+    n.includes("heera") ||
+    n.includes("neerja") ||
+    n.includes("swara") ||
+    n.includes("shruti") ||
+    n.includes("kalpana") ||
+    n.includes("chitra") ||
+    n.includes("geeta") ||
+    n.includes("priya") ||
+    n.includes("victoria") ||
+    n.includes("karen") ||
+    n.includes("google हिन्दी") ||
+    n.includes("google us english") ||
+    n.includes("google uk english female")
+  );
+};
+
 export const DakshinRobot: React.FC<DakshinRobotProps> = ({
   analysis,
   user,
@@ -216,74 +326,51 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
     }
   }, [messages, isSpeaking, loading, isMinimized, interimTranscript]);
 
+
   /**
    * TRAINED FEMALE / WOMEN VOICE SELECTOR
-   * Specifically picks high-quality natural female voices (Aria, Jenny, Zira, Samantha, Heera, Swara, Google Female)
-   * with feminine pitch calibration (1.16 - 1.22) for a soothing, friendly health coach tone.
+   * Strictly filters out all male voices and picks high quality female voices.
    */
   const getTrainedFemaleVoice = useCallback(
     (lang: DakshinLanguage): { voice: SpeechSynthesisVoice | null; hasNativeVoice: boolean } => {
-      if (!availableVoices.length) {
+      const liveVoices =
+        typeof window !== "undefined" && "speechSynthesis" in window
+          ? window.speechSynthesis.getVoices()
+          : [];
+      const voices = liveVoices.length > 0 ? liveVoices : availableVoices;
+      if (!voices.length) {
         return { voice: null, hasNativeVoice: false };
       }
 
-      // 1. Telugu Female Voice
+      // Filter out male voices so we NEVER play a man's voice
+      const nonMalePool = voices.filter((v) => !isMaleVoice(v));
+      const pool = nonMalePool.length > 0 ? nonMalePool : voices;
+
+      // 1. Native Telugu Female Voice (e.g. Edge "Microsoft Shruti")
       if (lang === "te") {
-        const teFemale = availableVoices.find(
-          (v) =>
-            v.lang.toLowerCase().startsWith("te") &&
-            (v.name.toLowerCase().includes("female") ||
-              v.name.toLowerCase().includes("swara") ||
-              v.name.toLowerCase().includes("chitra") ||
-              v.name.toLowerCase().includes("geeta"))
-        ) || availableVoices.find((v) => v.lang.toLowerCase().startsWith("te"));
-        if (teFemale) return { voice: teFemale, hasNativeVoice: true };
+        const teVoice = pool.find((v) => v.lang.toLowerCase().startsWith("te"));
+        if (teVoice) return { voice: teVoice, hasNativeVoice: true };
       }
 
-      // 2. Hindi Female Voice
+      // 2. Native Hindi Female Voice (e.g. "Microsoft Swara", "Google हिन्दी")
       if (lang === "hi") {
-        const hiFemale = availableVoices.find(
-          (v) =>
-            v.lang.toLowerCase().startsWith("hi") &&
-            (v.name.toLowerCase().includes("swara") ||
-              v.name.toLowerCase().includes("kalpana") ||
-              v.name.toLowerCase().includes("female") ||
-              v.name.toLowerCase().includes("google हिन्दी"))
-        ) || availableVoices.find((v) => v.lang.toLowerCase().startsWith("hi"));
-        if (hiFemale) return { voice: hiFemale, hasNativeVoice: true };
+        const hiVoice = pool.find((v) => v.lang.toLowerCase().startsWith("hi"));
+        if (hiVoice) return { voice: hiVoice, hasNativeVoice: true };
       }
 
       // 3. Indian English Female (Heera, Neerja, Priya)
-      const inEnFemale = availableVoices.find(
-        (v) =>
-          v.lang.toLowerCase().startsWith("en-in") &&
-          (v.name.toLowerCase().includes("heera") ||
-            v.name.toLowerCase().includes("neerja") ||
-            v.name.toLowerCase().includes("female") ||
-            v.name.toLowerCase().includes("priya"))
-      );
-      if (inEnFemale) return { voice: inEnFemale, hasNativeVoice: true };
+      const inEnFemale =
+        pool.find(
+          (v) => v.lang.toLowerCase().startsWith("en-in") && isConfirmedFemaleVoice(v)
+        ) || pool.find((v) => v.lang.toLowerCase().startsWith("en-in"));
+      if (inEnFemale) return { voice: inEnFemale, hasNativeVoice: false };
 
-      // 4. Natural Modern English Female Voices (Zira, Jenny, Aria, Samantha, Karen, Google US/UK Female)
-      const enFemale = availableVoices.find(
-        (v) =>
-          v.lang.toLowerCase().startsWith("en") &&
-          (v.name.toLowerCase().includes("zira") ||
-            v.name.toLowerCase().includes("aria") ||
-            v.name.toLowerCase().includes("jenny") ||
-            v.name.toLowerCase().includes("samantha") ||
-            v.name.toLowerCase().includes("victoria") ||
-            v.name.toLowerCase().includes("karen") ||
-            v.name.toLowerCase().includes("female") ||
-            v.name.toLowerCase().includes("google us english female") ||
-            v.name.toLowerCase().includes("google uk english female"))
-      );
-      if (enFemale) return { voice: enFemale, hasNativeVoice: true };
+      // 4. Confirmed Natural Female Voices (Zira, Jenny, Aria, Samantha)
+      const confirmedFemale = pool.find((v) => isConfirmedFemaleVoice(v));
+      if (confirmedFemale) return { voice: confirmedFemale, hasNativeVoice: false };
 
-      // 5. Fallback English
-      const genericEn = availableVoices.find((v) => v.lang.toLowerCase().startsWith("en-in")) ||
-                        availableVoices.find((v) => v.lang.toLowerCase().startsWith("en")) ||
-                        availableVoices[0];
+      // 5. Any English voice that isn't male
+      const genericEn = pool.find((v) => v.lang.toLowerCase().startsWith("en")) || pool[0];
       return { voice: genericEn || null, hasNativeVoice: false };
     },
     [availableVoices]
@@ -291,11 +378,31 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
 
   /**
    * Speak with Dakshin's Trained Female Voice
+   * Waits for voices to load so it never plays a fallback male OS narrator!
    */
   const speakFemaleVoice = useCallback(
-    (displayText: string, phoneticFallbackText: string | undefined, langToUse: DakshinLanguage, onDone?: () => void) => {
+    (
+      displayText: string,
+      phoneticFallbackText: string | undefined,
+      langToUse: DakshinLanguage,
+      onDone?: () => void
+    ) => {
       if (!soundEnabled || !("speechSynthesis" in window)) {
         if (onDone) onDone();
+        return;
+      }
+
+      // If browser voices are still loading, wait for them to load so it never falls back to Microsoft David (Male)
+      if (window.speechSynthesis.getVoices().length === 0) {
+        window.speechSynthesis.onvoiceschanged = () => {
+          window.speechSynthesis.onvoiceschanged = null;
+          speakFemaleVoice(displayText, phoneticFallbackText, langToUse, onDone);
+        };
+        setTimeout(() => {
+          if (window.speechSynthesis.getVoices().length > 0) {
+            speakFemaleVoice(displayText, phoneticFallbackText, langToUse, onDone);
+          }
+        }, 200);
         return;
       }
 
@@ -305,8 +412,16 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
         const { voice, hasNativeVoice } = getTrainedFemaleVoice(langToUse);
 
         let spokenString = displayText;
-        if ((langToUse === "te" || langToUse === "hi") && !hasNativeVoice && phoneticFallbackText) {
-          spokenString = phoneticFallbackText;
+        if (langToUse === "te") {
+          if (!hasNativeVoice) {
+            // Windows Chrome usually doesn't have an offline Telugu voice:
+            // Convert to smooth phonetic Roman Telugu so Indian Female voice articulates it clearly!
+            spokenString = phoneticFallbackText || transliterateTeluguToRoman(displayText);
+          }
+        } else if (langToUse === "hi") {
+          if (!hasNativeVoice && phoneticFallbackText) {
+            spokenString = phoneticFallbackText;
+          }
         }
 
         const utterance = new SpeechSynthesisUtterance(spokenString);
@@ -319,9 +434,9 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
           utterance.lang = langToUse === "te" ? "te-IN" : langToUse === "hi" ? "hi-IN" : "en-IN";
         }
 
-        // Female Pitch Tuning: 1.18 gives a melodious, warm, natural female health coach voice
-        utterance.pitch = 1.18;
-        utterance.rate = 1.0;
+        // Female Pitch Tuning: 1.25 gives a pleasant, unmistakable female health coach tone
+        utterance.pitch = 1.25;
+        utterance.rate = 0.98;
 
         utterance.onstart = () => {
           isSpeakingRef.current = true;
@@ -333,7 +448,6 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
           setIsSpeaking(false);
           activeUtteranceRef.current = null;
 
-          // If customer has kept the mic ON, resume continuous listening immediately!
           if (micHeldActiveRef.current) {
             startBrowserRecognition();
           }
@@ -537,26 +651,26 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
     }
   };
 
-  // Female Greetings matching the reference photo in Image 1
+  // Female Greetings
   const getShortGreeting = (lang: DakshinLanguage): { display: string; phonetic: string } => {
     const customerName = user?.fullName ? user.fullName.split(" ")[0] : "";
     const namePrefix = customerName ? `${customerName}! ` : "";
 
     if (lang === "te") {
       return {
-        display: `నమస్కారం ${namePrefix}నేను దక్షిణ్‌ని, మీ పర్సనల్ AI హెల్త్ అసిస్టెంట్‌ని. మీ BMI మరియు ఆరోగ్యం గురించి మాట్లాడటానికి మైక్ ఆన్ చేయండి!`,
-        phonetic: `Namaskaram ${namePrefix}Nenu Dakshin-ni, mee personal AI health assistant-ni. Mee BMI mariyu aarogyam gurinchi maatlaadataaniki mic on cheyandi!`,
+        display: `నమస్కారం ${namePrefix}నేను దక్షిణ్‌ని, మీ పర్సనల్ AI హెల్త్ అసిస్టెంట్‌ని. మీ BMI మరియు ఆరోగ్యం గురించి మాట్లాడండి!`,
+        phonetic: `Namaskaram ${namePrefix}Nenu Dakshin-ni, mee personal AI health assistant-ni. Mee BMI mariyu aarogyam gurinchi maatlaadandi!`,
       };
     }
 
     if (lang === "hi") {
       return {
-        display: `नमस्ते ${namePrefix}मैं दक्षिण हूँ, आपकी पर्सनल AI हेल्थ असिस्टेंट। अपनी BMI रिपोर्ट, डाइट या एक्सरसाइज के बारे में बात करने के लिए माइक ऑन करें!`,
-        phonetic: `Namaste ${namePrefix}Main Dakshin hoon, aapki personal AI health assistant! Apni report ke baare mein baat karne ke liye mic on karein!`,
+        display: `नमस्ते ${namePrefix}मैं दक्षिण हूँ, आपकी पर्सनल AI हेल्थ असिस्टेंट। अपनी BMI रिपोर्ट, डाइट या फिटनेस के बारे में बात करें!`,
+        phonetic: `Namaste ${namePrefix}Main Dakshin hoon, aapki personal AI health assistant! Apni report ke baare mein baat karein!`,
       };
     }
 
-    const text = `Hello ${namePrefix}I am Dakshin, your AI health coach. Turn on the mic to speak with me in English—I will keep listening until you turn it off!`;
+    const text = `Hello ${namePrefix}I am Dakshin, your AI health coach. Talk with me about your BMI report, diet, steps, or sleep!`;
     return { display: text, phonetic: text };
   };
 
@@ -758,12 +872,40 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
     ) {
       answerDisplay = habitKnowledge.visceral[language].display;
       answerPhonetic = habitKnowledge.visceral[language].phonetic;
+    } else if (
+      q.includes("price") ||
+      q.includes("cost") ||
+      q.includes("free") ||
+      q.includes("fee") ||
+      q.includes("charge") ||
+      q.includes("plan") ||
+      q.includes("ధర") ||
+      q.includes("ఖరీదు") ||
+      q.includes("ఫీజు") ||
+      q.includes("డబ్బు") ||
+      q.includes("ఉచితం") ||
+      q.includes("ప్రైస్") ||
+      q.includes("प्राइस") ||
+      q.includes("कीमत") ||
+      q.includes("दाम") ||
+      q.includes("फीस")
+    ) {
+      if (language === "te") {
+        answerDisplay = "యాక్టివ్‌లైఫ్ వెల్నెస్ ప్రాథమిక BMI విశ్లేషణ మరియు నా AI హెల్త్ కోచింగ్ పూర్తిగా ఉచితం! మీకు ప్రత్యేకమైన న్యూట్రిషన్ ప్లాన్ కావాలంటే మా వెల్నెస్ కోచ్‌లు వివరాలు అందిస్తారు.";
+        answerPhonetic = "ActiveLife Wellness praathamika BMI vishleshana mariyu naa AI health coaching poorthigaa uchitham! Meeku prathyekamaina nutrition plan kaavaalante maa wellness coach-lu vivaraalu andhisthaaru.";
+      } else if (language === "hi") {
+        answerDisplay = "एक्टिवलाइफ वेलनेस पर बुनियादी BMI रिपोर्ट एनालिसिस और मेरी AI हेल्थ सहायता बिल्कुल मुफ्त है! अगर आप व्यक्तिगत डाइट और न्यूट्रिशन क्लब कोचिंग प्लान चाहते हैं, तो हमारे एक्सपर्ट कोच से संपर्क करें।";
+        answerPhonetic = "ActiveLife Wellness par buniyadi BMI report analysis aur meri AI health sahayata bilkul muft hai! Personal diet aur nutrition club plan ke liye hamare wellness coach se sampark karein.";
+      } else {
+        answerDisplay = "ActiveLife Wellness basic report analysis and my AI health coaching are completely free! If you would like a personalized nutrition club diet or one-on-one fitness coaching, our wellness coaches can share package details.";
+        answerPhonetic = answerDisplay;
+      }
     } else {
       const reportContext = analysis
         ? `BMI: ${analysis.raw?.bmi || 35.1}, Visceral Fat: ${analysis.raw?.visceralFat || 15}, Body Fat: ${analysis.raw?.bodyFat || 21.1}%, Muscle: ${analysis.raw?.muscleMass || 21.8}kg, Water: ${analysis.raw?.bodyWater || 52}%`
         : undefined;
       answerDisplay = await sendDakshinMessage(trimmed, language, reportContext);
-      answerPhonetic = answerDisplay;
+      answerPhonetic = language === "te" ? transliterateTeluguToRoman(answerDisplay) : answerDisplay;
     }
 
     const robotMsg: RobotMessage = {
@@ -804,14 +946,20 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
         <div className="flex-1 min-w-0 pr-1">
           <div className="flex items-center gap-1.5">
             <span className="text-xs font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-teal-300">
-              Dakshin AI (Female Voice)
+              Dakshin AI
             </span>
             <span className="text-[10px] text-slate-400">
-              {isSpeaking ? "Speaking..." : isMicHeldOn ? "Mic ON · Listening" : "Ready"}
+              {isSpeaking
+                ? (language === "te" ? "మాట్లాడుతోంది..." : language === "hi" ? "बोल रही हूँ..." : "Speaking...")
+                : isMicHeldOn
+                ? (language === "te" ? "వింటోంది..." : language === "hi" ? "सुन रही हूँ..." : "Listening...")
+                : (language === "te" ? "సిద్ధంగా ఉంది" : language === "hi" ? "तैयार हूँ" : "Ready")}
             </span>
           </div>
           <p className="text-[11px] text-slate-300 truncate mt-0.5">
-            {isMicHeldOn ? "Mic ON continuously... speak anytime" : "Tap to turn on continuous mic"}
+            {isMicHeldOn
+              ? (language === "te" ? "వింటోంది... మాట్లాడండి" : language === "hi" ? "सुन रही हूँ... बोलिए" : "Listening... speak now")
+              : (language === "te" ? "మాట్లాడటానికి నొక్కండి" : language === "hi" ? "बात करने के लिए टैप करें" : "Tap to speak")}
           </p>
         </div>
 
@@ -826,7 +974,7 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
                 ? "bg-gradient-to-r from-rose-500 to-red-600 text-white shadow-rose-500/40 animate-pulse"
                 : "bg-gradient-to-r from-cyan-500 to-teal-500 text-slate-950 shadow-cyan-500/30"
             }`}
-            title={isMicHeldOn ? "Turn OFF mic" : "Turn ON mic (Stays ON)"}
+            title={isMicHeldOn ? "Stop mic" : "Start speaking"}
           >
             {isMicHeldOn ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
           </button>
@@ -854,12 +1002,12 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
     );
   }
 
-  // EXPANDED FUTURISTIC SPEAKING CHATBOT MODAL (IMAGE 1 DESIGN WITH CONTINUOUS MIC & FEMALE VOICE)
+  // EXPANDED FUTURISTIC SPEAKING CHATBOT MODAL (CLEAN HOLOGRAPHIC DESIGN)
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-xl animate-in fade-in duration-300">
       {/* Outer Glow Container */}
       <div className="relative w-full max-w-lg bg-slate-950 rounded-[2.5rem] shadow-[0_0_60px_rgba(6,182,212,0.18)] border border-cyan-500/30 overflow-hidden flex flex-col max-h-[92vh]">
-        {/* Background Ambient Glowing Orbs (Bokeh effect from Image 1) */}
+        {/* Background Ambient Glowing Orbs */}
         <div className="absolute top-10 left-8 w-44 h-44 rounded-full bg-purple-600/20 blur-3xl pointer-events-none -z-0"></div>
         <div className="absolute top-16 right-8 w-48 h-48 rounded-full bg-cyan-500/20 blur-3xl pointer-events-none -z-0"></div>
         <div className="absolute bottom-20 left-1/2 -translate-x-1/2 w-64 h-32 rounded-full bg-teal-500/15 blur-3xl pointer-events-none -z-0"></div>
@@ -875,9 +1023,6 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
             <div>
               <span className="text-xs font-extrabold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-teal-200 to-emerald-300 uppercase">
                 Dakshin AI
-              </span>
-              <span className="ml-1.5 text-[9px] font-semibold text-cyan-300/80 bg-cyan-500/10 border border-cyan-400/20 px-1.5 py-0.5 rounded-full">
-                Female Voice
               </span>
             </div>
           </div>
@@ -911,7 +1056,7 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
                 setSoundEnabled(!soundEnabled);
               }}
               className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 transition-colors"
-              title={soundEnabled ? "Mute voice" : "Enable female voice"}
+              title={soundEnabled ? "Mute voice" : "Enable voice"}
             >
               {soundEnabled ? (
                 <Volume2 className="h-3.5 w-3.5 text-cyan-400" />
@@ -945,7 +1090,7 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
           </div>
         </div>
 
-        {/* 2. HERO HOLOGRAPHIC SPEAKING CHATBOT DISPLAY (MATCHING REFERENCE IMAGE 1) */}
+        {/* 2. HERO HOLOGRAPHIC SPEAKING CHATBOT DISPLAY */}
         <div className="relative z-10 px-6 pt-5 pb-3 flex flex-col items-center text-center">
           {/* Glowing Circular Hologram Avatar Container */}
           <div className="relative flex items-center justify-center my-2">
@@ -966,7 +1111,7 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
               <div className="w-full h-full rounded-full bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center overflow-hidden border border-white/10 relative">
                 <div className="absolute inset-0 bg-radial from-cyan-500/25 via-transparent to-transparent"></div>
 
-                {/* Cute Smiling Holographic Robot Head (Exact likeness to Image 1) */}
+                {/* Cute Smiling Holographic Robot Head */}
                 <svg
                   className={`w-14 h-14 text-cyan-300 transition-transform duration-300 drop-shadow-[0_0_10px_rgba(6,182,212,0.9)] ${
                     isSpeaking ? "scale-105" : isMicHeldOn ? "scale-100" : "scale-95"
@@ -1005,7 +1150,7 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
             </div>
           </div>
 
-          {/* Heading Text: "Hello! How can I assist you today?" (Just like in Image 1) */}
+          {/* Heading Text */}
           <div className="mt-2 space-y-1">
             <h2 className="text-lg sm:text-xl font-bold tracking-tight text-white drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)]">
               {language === "te"
@@ -1016,14 +1161,14 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
             </h2>
             <p className="text-xs text-slate-400 font-medium">
               {isSpeaking
-                ? "Dakshin speaking aloud in female voice..."
+                ? (language === "te" ? "మాట్లాడుతోంది..." : language === "hi" ? "बोल रही हूँ..." : "Speaking...")
                 : isMicHeldOn
-                ? "🎙️ Mic is ON continuously — speak freely, I'm listening!"
-                : "Press 'Turn ON Mic' to talk in English (stays ON until you turn it OFF)"}
+                ? (language === "te" ? "వింటోంది... మాట్లాడండి" : language === "hi" ? "सुन रही हूँ... बोलिए" : "Listening... speak now")
+                : (language === "te" ? "సిద్ధంగా ఉంది" : language === "hi" ? "तैयार हूँ" : "Ready to talk")}
             </p>
           </div>
 
-          {/* 3. FLUID NEON RIBBON SOUND WAVE (EXACT MATCH TO IMAGE 1) */}
+          {/* 3. FLUID NEON RIBBON SOUND WAVE */}
           <div className="w-full flex justify-center mt-1">
             <HolographicSoundWave isSpeaking={isSpeaking} isListening={isMicHeldOn} />
           </div>
@@ -1031,14 +1176,16 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
 
         {/* 4. QUICK SUGGESTION HABIT PILLS */}
         <div className="relative z-10 px-4 py-2 border-y border-white/10 bg-slate-950/40 backdrop-blur-md flex items-center gap-2 overflow-x-auto no-scrollbar">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">Ask:</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">
+            {language === "te" ? "అడగండి:" : language === "hi" ? "पूछें:" : "Ask:"}
+          </span>
 
           <button
             onClick={() => handleUserDoubt(habitKnowledge.steps[language].title, "steps")}
             className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-cyan-500/20 border border-white/10 hover:border-cyan-400/40 text-xs font-medium text-slate-300 hover:text-cyan-200 transition-all active:scale-95 shadow-xs"
           >
             <Footprints className="h-3.5 w-3.5 text-cyan-400" />
-            <span>Daily Steps</span>
+            <span>{language === "te" ? "రోజువారీ నడక" : language === "hi" ? "डेली वॉक" : "Daily Steps"}</span>
           </button>
 
           <button
@@ -1046,7 +1193,7 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
             className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-emerald-500/20 border border-white/10 hover:border-emerald-400/40 text-xs font-medium text-slate-300 hover:text-emerald-200 transition-all active:scale-95 shadow-xs"
           >
             <Utensils className="h-3.5 w-3.5 text-emerald-400" />
-            <span>Food Habits</span>
+            <span>{language === "te" ? "ఆహారపు అలవాట్లు" : language === "hi" ? "खान-पान" : "Food Habits"}</span>
           </button>
 
           <button
@@ -1054,7 +1201,7 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
             className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-blue-500/20 border border-white/10 hover:border-blue-400/40 text-xs font-medium text-slate-300 hover:text-blue-200 transition-all active:scale-95 shadow-xs"
           >
             <Droplets className="h-3.5 w-3.5 text-blue-400" />
-            <span>Water Intake</span>
+            <span>{language === "te" ? "మంచినీరు" : language === "hi" ? "पानी का नियम" : "Water Intake"}</span>
           </button>
 
           <button
@@ -1062,7 +1209,7 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
             className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-purple-500/20 border border-white/10 hover:border-purple-400/40 text-xs font-medium text-slate-300 hover:text-purple-200 transition-all active:scale-95 shadow-xs"
           >
             <Moon className="h-3.5 w-3.5 text-purple-400" />
-            <span>Good Sleep</span>
+            <span>{language === "te" ? "మంచి నిద్ర" : language === "hi" ? "अच्छी नींद" : "Good Sleep"}</span>
           </button>
 
           <button
@@ -1070,7 +1217,7 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
             className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-rose-500/20 border border-white/10 hover:border-rose-400/40 text-xs font-medium text-slate-300 hover:text-rose-200 transition-all active:scale-95 shadow-xs"
           >
             <TrendingDown className="h-3.5 w-3.5 text-rose-400" />
-            <span>Visceral Fat</span>
+            <span>{language === "te" ? "విసెరల్ ఫ్యాట్" : language === "hi" ? "विसरल फैट" : "Visceral Fat"}</span>
           </button>
         </div>
 
@@ -1083,19 +1230,16 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
         )}
 
         {isMicHeldOn && (
-          <div className="relative z-10 bg-cyan-950/50 border-b border-cyan-500/30 px-4 py-2 text-cyan-200 text-xs flex items-center justify-between gap-2">
+          <div className="relative z-10 bg-cyan-950/40 border-b border-cyan-500/20 px-4 py-2 text-cyan-200 text-xs flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 overflow-hidden">
               <span className="h-2 w-2 rounded-full bg-cyan-400 animate-ping shrink-0"></span>
               <span className="font-semibold text-cyan-300 shrink-0">
-                {interimTranscript ? "Hearing you:" : "Listening continuously:"}
+                {language === "te" ? "వింటోంది:" : language === "hi" ? "सुन रही हूँ:" : "Listening:"}
               </span>
               <span className="italic truncate text-white">
-                {interimTranscript ? `"${interimTranscript}"` : "Speak your doubt anytime..."}
+                {interimTranscript ? `"${interimTranscript}"` : (language === "te" ? "మాట్లాడండి..." : language === "hi" ? "बोलिए..." : "Speak now...")}
               </span>
             </div>
-            <span className="text-[10px] text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-full shrink-0 border border-cyan-500/20">
-              Mic Stays ON
-            </span>
           </div>
         )}
 
@@ -1121,7 +1265,7 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
               >
                 <div className="flex items-center justify-between gap-2 mb-1 border-b border-white/10 pb-1">
                   <span className="text-[10px] font-bold text-cyan-300 uppercase tracking-wider">
-                    {msg.role === "robot" ? "Dakshin AI (Female Voice)" : user?.fullName || "You"}
+                    {msg.role === "robot" ? "Dakshin AI" : user?.fullName || "You"}
                   </span>
                   <span className="text-[10px] text-slate-400 font-mono">{msg.timestamp}</span>
                 </div>
@@ -1150,9 +1294,9 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
           <div ref={messagesEndRef} />
         </div>
 
-        {/* 7. BOTTOM INTERACTIVE CONTROLS (CONTINUOUS MIC TOGGLE + TEXT INPUT) */}
+        {/* 7. BOTTOM INTERACTIVE CONTROLS (MIC TOGGLE + TEXT INPUT) */}
         <div className="relative z-10 p-4 border-t border-white/10 bg-slate-950/80 backdrop-blur-xl flex flex-col gap-2.5">
-          {/* CONTINUOUS MIC ON / OFF TOGGLE (KEEPS MIC ON UNTIL CUSTOMER TURNS IT OFF) */}
+          {/* MIC ON / OFF TOGGLE */}
           <button
             type="button"
             id="dakshin-mic-btn"
@@ -1163,22 +1307,24 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
                 handleTurnOnContinuousMic();
               }
             }}
-            className={`w-full flex items-center justify-center gap-2.5 py-3.5 px-5 rounded-2xl text-xs sm:text-sm font-extrabold tracking-wide transition-all shadow-lg active:scale-98 ${
+            className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl text-xs sm:text-sm font-bold tracking-wide transition-all shadow-md active:scale-98 ${
               isMicHeldOn
-                ? "bg-gradient-to-r from-rose-600 via-red-600 to-amber-600 text-white shadow-[0_0_25px_rgba(225,29,72,0.5)] animate-pulse"
-                : "bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-400 text-slate-950 shadow-[0_0_25px_rgba(6,182,212,0.4)] hover:shadow-[0_0_35px_rgba(6,182,212,0.6)]"
+                ? "bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-[0_0_16px_rgba(225,29,72,0.4)] animate-pulse"
+                : "bg-gradient-to-r from-cyan-500 to-teal-500 text-slate-950 shadow-[0_0_16px_rgba(6,182,212,0.3)] hover:opacity-95"
             }`}
           >
             {isMicHeldOn ? (
               <>
-                <MicOff className="h-5 w-5" />
-                <span>Turn OFF Mic (Mic is ON continuously · Click to Stop)</span>
+                <MicOff className="h-4 w-4" />
+                <span>
+                  {language === "te" ? "మైక్ ఆపండి" : language === "hi" ? "माइक बंद करें" : "Stop Mic"}
+                </span>
               </>
             ) : (
               <>
-                <Mic className="h-5 w-5" />
+                <Mic className="h-4 w-4" />
                 <span>
-                  Turn ON Mic to Talk in English (Stays ON until you click OFF)
+                  {language === "te" ? "మాట్లాడండి" : language === "hi" ? "बात करें" : "Tap to Speak"}
                 </span>
               </>
             )}
@@ -1196,7 +1342,13 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              placeholder={`Or type your question in ${DAKSHIN_LANGUAGES.find((l) => l.id === language)?.native}...`}
+              placeholder={
+                language === "te"
+                  ? "మీ సందేహాన్ని ఇక్కడ టైప్ చేయండి..."
+                  : language === "hi"
+                  ? "अपना सवाल यहाँ लिखें..."
+                  : "Type your question..."
+              }
               className="flex-1 rounded-2xl border border-white/15 bg-white/5 px-4 py-2.5 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:bg-white/10 focus:outline-none focus:ring-1 focus:ring-cyan-400 transition-all"
             />
             <button
