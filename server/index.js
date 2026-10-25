@@ -95,6 +95,35 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
+// 4. Natural Voice TTS Stream (Telugu, Hindi, English Female Voices)
+app.get("/api/tts", async (req, res) => {
+  try {
+    const text = req.query.q || "";
+    const lang = req.query.tl || "te";
+    if (!text) {
+      return res.status(400).send("Missing parameter 'q'");
+    }
+    const googleUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${encodeURIComponent(
+      lang
+    )}&client=tw-ob&q=${encodeURIComponent(text)}`;
+    const response = await fetch(googleUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+    });
+    if (!response.ok) throw new Error(`Google TTS status: ${response.status}`);
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    const arrayBuffer = await response.arrayBuffer();
+    res.send(Buffer.from(arrayBuffer));
+  } catch (err) {
+    console.error("TTS endpoint error:", err);
+    res.status(500).send("TTS error");
+  }
+});
+
 // Serve frontend static files in production
 const distPath = path.resolve(__dirname, "../dist");
 app.use(express.static(distPath));

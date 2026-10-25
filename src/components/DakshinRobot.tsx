@@ -290,11 +290,27 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
   const recognitionRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
   const isSpeakingRef = useRef(false);
   const micHeldActiveRef = useRef(false);
   const accumulatedSpeechRef = useRef<string>("");
   const silenceTimerRef = useRef<any>(null);
   const spokenSessionKeyRef = useRef<string>("");
+  const currentLanguageRef = useRef<DakshinLanguage>(language);
+  const soundEnabledRef = useRef<boolean>(soundEnabled);
+  const handleUserDoubtRef = useRef<(query: string, topic?: string) => void>(() => {});
+
+  // Sync language and soundEnabled refs immediately
+  useEffect(() => {
+    currentLanguageRef.current = language;
+  }, [language]);
+
+  useEffect(() => {
+    soundEnabledRef.current = soundEnabled;
+    if (!soundEnabled) {
+      stopAllAudioAndSpeech();
+    }
+  }, [soundEnabled]);
 
   // Load and cache browser voices safely
   useEffect(() => {
@@ -326,6 +342,26 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
     }
   }, [messages, isSpeaking, loading, isMinimized, interimTranscript]);
 
+  /**
+   * Stop all active audio and Web Speech voices immediately
+   */
+  const stopAllAudioAndSpeech = useCallback(() => {
+    if (activeAudioRef.current) {
+      try {
+        activeAudioRef.current.pause();
+        activeAudioRef.current.currentTime = 0;
+        activeAudioRef.current = null;
+      } catch (_) {}
+    }
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (_) {}
+    }
+    activeUtteranceRef.current = null;
+    isSpeakingRef.current = false;
+    setIsSpeaking(false);
+  }, []);
 
   /**
    * TRAINED FEMALE / WOMEN VOICE SELECTOR
@@ -377,51 +413,29 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
   );
 
   /**
-   * Speak with Dakshin's Trained Female Voice
-   * Waits for voices to load so it never plays a fallback male OS narrator!
+   * Secondary Fallback: Browser Web Speech API
    */
-  const speakFemaleVoice = useCallback(
+  const playViaSpeechSynthesis = useCallback(
     (
-      displayText: string,
-      phoneticFallbackText: string | undefined,
+      textToSpeak: string,
       langToUse: DakshinLanguage,
-      onDone?: () => void
+      phoneticFallback?: string,
+      onFinished?: () => void
     ) => {
-      if (!soundEnabled || !("speechSynthesis" in window)) {
-        if (onDone) onDone();
-        return;
-      }
-
-      // If browser voices are still loading, wait for them to load so it never falls back to Microsoft David (Male)
-      if (window.speechSynthesis.getVoices().length === 0) {
-        window.speechSynthesis.onvoiceschanged = () => {
-          window.speechSynthesis.onvoiceschanged = null;
-          speakFemaleVoice(displayText, phoneticFallbackText, langToUse, onDone);
-        };
-        setTimeout(() => {
-          if (window.speechSynthesis.getVoices().length > 0) {
-            speakFemaleVoice(displayText, phoneticFallbackText, langToUse, onDone);
-          }
-        }, 200);
+      if (!soundEnabledRef.current || !("speechSynthesis" in window)) {
+        if (onFinished) onFinished();
         return;
       }
 
       try {
         window.speechSynthesis.cancel();
-
         const { voice, hasNativeVoice } = getTrainedFemaleVoice(langToUse);
 
-        let spokenString = displayText;
-        if (langToUse === "te") {
-          if (!hasNativeVoice) {
-            // Windows Chrome usually doesn't have an offline Telugu voice:
-            // Convert to smooth phonetic Roman Telugu so Indian Female voice articulates it clearly!
-            spokenString = phoneticFallbackText || transliterateTeluguToRoman(displayText);
-          }
-        } else if (langToUse === "hi") {
-          if (!hasNativeVoice && phoneticFallbackText) {
-            spokenString = phoneticFallbackText;
-          }
+        let spokenString = textToSpeak;
+        if (langToUse === "te" && !hasNativeVoice) {
+          spokenString = phoneticFallback || transliterateTeluguToRoman(textToSpeak);
+        } else if (langToUse === "hi" && !hasNativeVoice && phoneticFallback) {
+          spokenString = phoneticFallback;
         }
 
         const utterance = new SpeechSynthesisUtterance(spokenString);
@@ -434,7 +448,6 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
           utterance.lang = langToUse === "te" ? "te-IN" : langToUse === "hi" ? "hi-IN" : "en-IN";
         }
 
-        // Female Pitch Tuning: 1.25 gives a pleasant, unmistakable female health coach tone
         utterance.pitch = 1.25;
         utterance.rate = 0.98;
 
@@ -447,56 +460,205 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
           isSpeakingRef.current = false;
           setIsSpeaking(false);
           activeUtteranceRef.current = null;
-
           if (micHeldActiveRef.current) {
             startBrowserRecognition();
           }
-
-          if (onDone) onDone();
+          if (onFinished) onFinished();
         };
 
         utterance.onerror = (e) => {
           if (e.error !== "canceled" && e.error !== "interrupted") {
-            console.warn("Speech synthesis notice:", e.error);
+            console.warn("Speech error:", e.error);
           }
           isSpeakingRef.current = false;
           setIsSpeaking(false);
           activeUtteranceRef.current = null;
-
           if (micHeldActiveRef.current) {
             startBrowserRecognition();
           }
-
-          if (onDone) onDone();
+          if (onFinished) onFinished();
         };
 
         window.speechSynthesis.speak(utterance);
       } catch (err) {
-        console.warn("Speech error:", err);
+        console.warn("Speech synthesis error:", err);
         isSpeakingRef.current = false;
         setIsSpeaking(false);
         if (micHeldActiveRef.current) {
           startBrowserRecognition();
         }
-        if (onDone) onDone();
+        if (onFinished) onFinished();
       }
     },
-    [soundEnabled, getTrainedFemaleVoice]
+    [getTrainedFemaleVoice]
   );
 
   /**
-   * Safe recognition starter helper
+   * Speak with Dakshin's Trained Real Female Voice
+   * - In Telugu (te) & Hindi (hi): Speaks authentic, native Indian female voice via Natural Audio Stream.
+   *   Seamlessly plays sequentially so long paragraphs sound fluid with zero robotic artifact!
+   * - In English (en): Uses high quality tuned female speech (pitch 1.25).
+   * - Offline resilient: Falls back safely if network drops.
+   */
+  const speakFemaleVoice = useCallback(
+    (
+      displayText: string,
+      phoneticFallbackText: string | undefined,
+      langToUse: DakshinLanguage,
+      onDone?: () => void
+    ) => {
+      if (!soundEnabledRef.current) {
+        if (onDone) onDone();
+        return;
+      }
+
+      stopAllAudioAndSpeech();
+
+      // For Telugu and Hindi: Natural Authentic Female Audio Engine
+      if (langToUse === "te" || langToUse === "hi") {
+        const cleanText = displayText
+          .replace(/[\*\#\_\[\]\(\)]/g, "")
+          .replace(/[0-9]+(\.[0-9]+)?/g, (match) => ` ${match} `)
+          .trim();
+
+        // Split text into natural spoken phrases (max ~130 chars each) for fluid playback
+        const sentences = cleanText
+          .split(/(?<=[.!?,\n])\s+/)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+
+        const chunks: string[] = [];
+        let current = "";
+        for (const s of sentences) {
+          if ((current + " " + s).trim().length <= 130) {
+            current = (current + " " + s).trim();
+          } else {
+            if (current) chunks.push(current);
+            current = s.length > 130 ? s.slice(0, 130) : s;
+          }
+        }
+        if (current) chunks.push(current);
+
+        const chunksToPlay = chunks.length > 0 ? chunks : [cleanText.slice(0, 130)];
+        let chunkIndex = 0;
+
+        const playNextChunk = () => {
+          if (chunkIndex >= chunksToPlay.length || !soundEnabledRef.current) {
+            isSpeakingRef.current = false;
+            setIsSpeaking(false);
+            activeAudioRef.current = null;
+            if (micHeldActiveRef.current) {
+              startBrowserRecognition();
+            }
+            if (onDone) onDone();
+            return;
+          }
+
+          const currentChunk = chunksToPlay[chunkIndex];
+          chunkIndex++;
+
+          const proxyUrl = `/api/tts?tl=${langToUse}&q=${encodeURIComponent(currentChunk)}`;
+          const directUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${langToUse}&client=tw-ob&q=${encodeURIComponent(
+            currentChunk
+          )}`;
+
+          const audio = new Audio(proxyUrl);
+          activeAudioRef.current = audio;
+
+          isSpeakingRef.current = true;
+          setIsSpeaking(true);
+
+          audio.onended = () => {
+            playNextChunk();
+          };
+
+          audio.onerror = () => {
+            // Direct fallback
+            const fallbackAudio = new Audio(directUrl);
+            activeAudioRef.current = fallbackAudio;
+            fallbackAudio.onended = () => {
+              playNextChunk();
+            };
+            fallbackAudio.onerror = () => {
+              playViaSpeechSynthesis(currentChunk, langToUse, phoneticFallbackText, () => {
+                playNextChunk();
+              });
+            };
+            fallbackAudio.play().catch(() => {
+              playViaSpeechSynthesis(currentChunk, langToUse, phoneticFallbackText, () => {
+                playNextChunk();
+              });
+            });
+          };
+
+          audio.play().catch((err) => {
+            console.warn("Audio play blocked or offline, trying direct or speech synthesis:", err);
+            const directAudio = new Audio(directUrl);
+            activeAudioRef.current = directAudio;
+            directAudio.onended = () => playNextChunk();
+            directAudio.onerror = () => {
+              playViaSpeechSynthesis(currentChunk, langToUse, phoneticFallbackText, () => {
+                playNextChunk();
+              });
+            };
+            directAudio.play().catch(() => {
+              playViaSpeechSynthesis(currentChunk, langToUse, phoneticFallbackText, () => {
+                playNextChunk();
+              });
+            });
+          });
+        };
+
+        playNextChunk();
+        return;
+      }
+
+      // English: Browser SpeechSynthesis with high-quality female pitch
+      playViaSpeechSynthesis(displayText, langToUse, phoneticFallbackText, onDone);
+    },
+    [stopAllAudioAndSpeech, playViaSpeechSynthesis]
+  );
+
+  /**
+   * Safe recognition starter helper with dynamic language binding
    */
   const startBrowserRecognition = () => {
     if (!recognitionRef.current || isSpeakingRef.current) return;
     try {
+      const activeLang = currentLanguageRef.current;
       recognitionRef.current.lang =
-        language === "te" ? "te-IN" : language === "hi" ? "hi-IN" : "en-IN";
+        activeLang === "te" ? "te-IN" : activeLang === "hi" ? "hi-IN" : "en-IN";
       recognitionRef.current.start();
     } catch (_) {
       // If already started, that's fine
     }
   };
+
+  /**
+   * Update Speech Recognition language whenever user changes language pill
+   */
+  useEffect(() => {
+    if (recognitionRef.current) {
+      const recognitionLang =
+        language === "te" ? "te-IN" : language === "hi" ? "hi-IN" : "en-IN";
+      recognitionRef.current.lang = recognitionLang;
+
+      // If mic is currently active, restart recognition with new language immediately
+      if (micHeldActiveRef.current && !isSpeakingRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (_) {}
+        setTimeout(() => {
+          if (micHeldActiveRef.current && !isSpeakingRef.current) {
+            try {
+              recognitionRef.current.lang = recognitionLang;
+              recognitionRef.current.start();
+            } catch (_) {}
+          }
+        }, 150);
+      }
+    }
+  }, [language]);
 
   /**
    * CONTINUOUS SPEECH RECOGNITION SETUP
@@ -550,7 +712,7 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
             if (queryToSend.trim().length > 1) {
               accumulatedSpeechRef.current = "";
               setInterimTranscript("");
-              handleUserDoubt(queryToSend.trim());
+              handleUserDoubtRef.current(queryToSend.trim());
             }
           }, 1300);
         }
@@ -576,6 +738,9 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
           setTimeout(() => {
             if (micHeldActiveRef.current && !isSpeakingRef.current) {
               try {
+                const activeLang = currentLanguageRef.current;
+                recognition.lang =
+                  activeLang === "te" ? "te-IN" : activeLang === "hi" ? "hi-IN" : "en-IN";
                 recognition.start();
               } catch (_) {}
             }
@@ -608,12 +773,8 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
       return;
     }
 
-    // Stop Dakshin if speaking
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
-    isSpeakingRef.current = false;
-    setIsSpeaking(false);
+    // Stop any ongoing voice playback
+    stopAllAudioAndSpeech();
 
     // Set Held ON flags
     micHeldActiveRef.current = true;
@@ -647,7 +808,7 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
     }
 
     if (leftover.length > 1) {
-      handleUserDoubt(leftover);
+      handleUserDoubtRef.current(leftover);
     }
   };
 
@@ -770,9 +931,7 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
   useEffect(() => {
     if (!isOpen) {
       spokenSessionKeyRef.current = "";
-      if ("speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-      }
+      stopAllAudioAndSpeech();
       handleTurnOffMic();
       setIsSpeaking(false);
       isSpeakingRef.current = false;
@@ -799,128 +958,190 @@ export const DakshinRobot: React.FC<DakshinRobotProps> = ({
 
     // Speak initial greeting in trained female voice
     speakFemaleVoice(greeting.display, greeting.phonetic, language);
-  }, [isOpen, analysis?.id, language]);
+  }, [isOpen, analysis?.id, language, speakFemaleVoice, stopAllAudioAndSpeech]);
 
   // Handle customer query from Voice or Text or Habit Chips
-  const handleUserDoubt = async (queryText: string, specificTopic?: string) => {
-    const trimmed = queryText.trim();
-    if (!trimmed || loading) return;
+  const handleUserDoubt = useCallback(
+    async (queryText: string, specificTopic?: string) => {
+      const trimmed = queryText.trim();
+      if (!trimmed || loading) return;
 
-    const userMsg: RobotMessage = {
-      id: "user-" + Date.now(),
-      role: "user",
-      text: trimmed,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    };
+      const currentLang = currentLanguageRef.current;
 
-    setMessages((prev) => [...prev, userMsg]);
-    setInputText("");
-    setLoading(true);
+      const userMsg: RobotMessage = {
+        id: "user-" + Date.now(),
+        role: "user",
+        text: trimmed,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
 
-    let answerDisplay = "";
-    let answerPhonetic: string | undefined = undefined;
+      setMessages((prev) => [...prev, userMsg]);
+      setInputText("");
+      setLoading(true);
 
-    const q = trimmed.toLowerCase();
-    if (specificTopic && habitKnowledge[specificTopic]) {
-      answerDisplay = habitKnowledge[specificTopic][language].display;
-      answerPhonetic = habitKnowledge[specificTopic][language].phonetic;
-    } else if (
-      q.includes("step") ||
-      q.includes("walk") ||
-      q.includes("నడక") ||
-      q.includes("అడుగు") ||
-      q.includes("कदम")
-    ) {
-      answerDisplay = habitKnowledge.steps[language].display;
-      answerPhonetic = habitKnowledge.steps[language].phonetic;
-    } else if (
-      q.includes("food") ||
-      q.includes("diet") ||
-      q.includes("eat") ||
-      q.includes("meal") ||
-      q.includes("ఆహార") ||
-      q.includes("తిండి") ||
-      q.includes("डाइट") ||
-      q.includes("खाना")
-    ) {
-      answerDisplay = habitKnowledge.diet[language].display;
-      answerPhonetic = habitKnowledge.diet[language].phonetic;
-    } else if (
-      q.includes("water") ||
-      q.includes("drink") ||
-      q.includes("నీరు") ||
-      q.includes("మంచినీరు") ||
-      q.includes("पानी")
-    ) {
-      answerDisplay = habitKnowledge.water[language].display;
-      answerPhonetic = habitKnowledge.water[language].phonetic;
-    } else if (
-      q.includes("sleep") ||
-      q.includes("rest") ||
-      q.includes("bed") ||
-      q.includes("నిద్ర") ||
-      q.includes("नींद")
-    ) {
-      answerDisplay = habitKnowledge.sleep[language].display;
-      answerPhonetic = habitKnowledge.sleep[language].phonetic;
-    } else if (
-      q.includes("visceral") ||
-      q.includes("belly") ||
-      q.includes("tummy") ||
-      q.includes("కొవ్వు") ||
-      q.includes("చర్బీ")
-    ) {
-      answerDisplay = habitKnowledge.visceral[language].display;
-      answerPhonetic = habitKnowledge.visceral[language].phonetic;
-    } else if (
-      q.includes("price") ||
-      q.includes("cost") ||
-      q.includes("free") ||
-      q.includes("fee") ||
-      q.includes("charge") ||
-      q.includes("plan") ||
-      q.includes("ధర") ||
-      q.includes("ఖరీదు") ||
-      q.includes("ఫీజు") ||
-      q.includes("డబ్బు") ||
-      q.includes("ఉచితం") ||
-      q.includes("ప్రైస్") ||
-      q.includes("प्राइस") ||
-      q.includes("कीमत") ||
-      q.includes("दाम") ||
-      q.includes("फीस")
-    ) {
-      if (language === "te") {
-        answerDisplay = "యాక్టివ్‌లైఫ్ వెల్నెస్ ప్రాథమిక BMI విశ్లేషణ మరియు నా AI హెల్త్ కోచింగ్ పూర్తిగా ఉచితం! మీకు ప్రత్యేకమైన న్యూట్రిషన్ ప్లాన్ కావాలంటే మా వెల్నెస్ కోచ్‌లు వివరాలు అందిస్తారు.";
-        answerPhonetic = "ActiveLife Wellness praathamika BMI vishleshana mariyu naa AI health coaching poorthigaa uchitham! Meeku prathyekamaina nutrition plan kaavaalante maa wellness coach-lu vivaraalu andhisthaaru.";
-      } else if (language === "hi") {
-        answerDisplay = "एक्टिवलाइफ वेलनेस पर बुनियादी BMI रिपोर्ट एनालिसिस और मेरी AI हेल्थ सहायता बिल्कुल मुफ्त है! अगर आप व्यक्तिगत डाइट और न्यूट्रिशन क्लब कोचिंग प्लान चाहते हैं, तो हमारे एक्सपर्ट कोच से संपर्क करें।";
-        answerPhonetic = "ActiveLife Wellness par buniyadi BMI report analysis aur meri AI health sahayata bilkul muft hai! Personal diet aur nutrition club plan ke liye hamare wellness coach se sampark karein.";
+      let answerDisplay = "";
+      let answerPhonetic: string | undefined = undefined;
+
+      const q = trimmed.toLowerCase();
+      if (specificTopic && habitKnowledge[specificTopic]) {
+        answerDisplay = habitKnowledge[specificTopic][currentLang].display;
+        answerPhonetic = habitKnowledge[specificTopic][currentLang].phonetic;
+      } else if (
+        // Name introduction or greeting check (including Telugu/Hindi/English)
+        q.includes("lokesh") ||
+        q.includes("naate") ||
+        q.includes("naa peru") ||
+        q.includes("mera naam") ||
+        q.includes("నా పేరు") ||
+        q.includes("లోకేష్") ||
+        q.includes("मेरा नाम") ||
+        q.includes("लोकेश") ||
+        q.includes("hello") ||
+        q.includes("hi") ||
+        q.includes("hey") ||
+        q.includes("who are you") ||
+        q.includes("నమస్కా") ||
+        q.includes("నమస్తే") ||
+        q.includes("नमस्ते")
+      ) {
+        if (currentLang === "te") {
+          answerDisplay =
+            "నమస్కారం లోకేష్ గారు! నేను దక్షిణ్‌ని, మీ పర్సనల్ AI హెల్త్ అసిస్టెంట్‌ని. మీ BMI నివేదిక 35.1 మరియు విసెరల్ ఫ్యాట్ 15 గా ఉంది. ఆహారపు అలవాట్లు, రోజువారీ నడక, నీరు లేదా నిద్ర గురించి ఏ సందేహం ఉన్నా అడగండి, నేను సమాధానం చెబుతాను!";
+          answerPhonetic =
+            "Namaskaram Lokesh gaaru! Nenu Dakshin-ni, mee personal AI health assistant-ni. Mee BMI report, aahaarapu alavaatlu, rojoo nadaka ledaa nidra gurinchi emi sandeham unnaa adagandi, nenu maatlaadathaanu!";
+        } else if (currentLang === "hi") {
+          answerDisplay =
+            "नमस्ते लोकेश जी! मैं दक्षिण हूँ, आपकी पर्सनल AI हेल्थ असिस्टेंट। आपकी BMI रिपोर्ट 35.1 और विसरल फैट 15 है। डाइट, रोजाना 10,000 कदम वॉक, पानी या नींद को लेकर जो भी सवाल हो, मुझसे सीधे पूछें!";
+          answerPhonetic =
+            "Namaste Lokesh ji! Main Dakshin hoon, aapki personal AI health assistant! Apni report ke baare mein baat karein!";
+        } else {
+          answerDisplay =
+            "Hello Lokesh! I am Dakshin, your AI health coach. Talk with me about your BMI report (35.1), healthy nutrition, daily 10,000 steps, hydration, or sleep habits!";
+          answerPhonetic = answerDisplay;
+        }
+      } else if (
+        q.includes("step") ||
+        q.includes("walk") ||
+        q.includes("నడక") ||
+        q.includes("అడుగు") ||
+        q.includes("వాకింగ్") ||
+        q.includes("कदम") ||
+        q.includes("वॉक") ||
+        q.includes("चलना")
+      ) {
+        answerDisplay = habitKnowledge.steps[currentLang].display;
+        answerPhonetic = habitKnowledge.steps[currentLang].phonetic;
+      } else if (
+        q.includes("food") ||
+        q.includes("diet") ||
+        q.includes("eat") ||
+        q.includes("meal") ||
+        q.includes("ఆహార") ||
+        q.includes("తిండి") ||
+        q.includes("తినాలి") ||
+        q.includes("డైట్") ||
+        q.includes("डाइट") ||
+        q.includes("खाना") ||
+        q.includes("भोजन")
+      ) {
+        answerDisplay = habitKnowledge.diet[currentLang].display;
+        answerPhonetic = habitKnowledge.diet[currentLang].phonetic;
+      } else if (
+        q.includes("water") ||
+        q.includes("drink") ||
+        q.includes("నీరు") ||
+        q.includes("మంచినీరు") ||
+        q.includes("నీళ్ళు") ||
+        q.includes("पानी")
+      ) {
+        answerDisplay = habitKnowledge.water[currentLang].display;
+        answerPhonetic = habitKnowledge.water[currentLang].phonetic;
+      } else if (
+        q.includes("sleep") ||
+        q.includes("rest") ||
+        q.includes("bed") ||
+        q.includes("నిద్ర") ||
+        q.includes("పడుకో") ||
+        q.includes("नींद") ||
+        q.includes("सोना")
+      ) {
+        answerDisplay = habitKnowledge.sleep[currentLang].display;
+        answerPhonetic = habitKnowledge.sleep[currentLang].phonetic;
+      } else if (
+        q.includes("visceral") ||
+        q.includes("belly") ||
+        q.includes("tummy") ||
+        q.includes("కొవ్వు") ||
+        q.includes("పొట్ట") ||
+        q.includes("ఫ్యాట్") ||
+        q.includes("చర్బీ") ||
+        q.includes("पेट")
+      ) {
+        answerDisplay = habitKnowledge.visceral[currentLang].display;
+        answerPhonetic = habitKnowledge.visceral[currentLang].phonetic;
+      } else if (
+        q.includes("price") ||
+        q.includes("cost") ||
+        q.includes("free") ||
+        q.includes("fee") ||
+        q.includes("charge") ||
+        q.includes("plan") ||
+        q.includes("ధర") ||
+        q.includes("ఖరీదు") ||
+        q.includes("ఫీజు") ||
+        q.includes("డబ్బు") ||
+        q.includes("ఉచితం") ||
+        q.includes("ప్రైస్") ||
+        q.includes("प्राइस") ||
+        q.includes("कीमत") ||
+        q.includes("दाम") ||
+        q.includes("फीस")
+      ) {
+        if (currentLang === "te") {
+          answerDisplay =
+            "యాక్టివ్‌లైఫ్ వెల్నెస్ ప్రాథమిక BMI విశ్లేషణ మరియు నా AI హెల్త్ కోచింగ్ పూర్తిగా ఉచితం! మీకు ప్రత్యేకమైన న్యూట్రిషన్ ప్లాన్ కావాలంటే మా వెల్నెస్ కోచ్‌లు వివరాలు అందిస్తారు.";
+          answerPhonetic =
+            "ActiveLife Wellness praathamika BMI vishleshana mariyu naa AI health coaching poorthigaa uchitham! Meeku prathyekamaina nutrition plan kaavaalante maa wellness coach-lu vivaraalu andhisthaaru.";
+        } else if (currentLang === "hi") {
+          answerDisplay =
+            "एक्टिवलाइफ वेलनेस पर बुनियादी BMI रिपोर्ट एनालिसिस और मेरी AI हेल्थ सहायता बिल्कुल मुफ्त है! अगर आप व्यक्तिगत डाइट और न्यूट्रिशन क्लब कोचिंग प्लान चाहते हैं, तो हमारे एक्सपर्ट कोच से संपर्क करें।";
+          answerPhonetic =
+            "ActiveLife Wellness par buniyadi BMI report analysis aur meri AI health sahayata bilkul muft hai! Personal diet aur nutrition club plan ke liye hamare wellness coach se sampark karein.";
+        } else {
+          answerDisplay =
+            "ActiveLife Wellness basic report analysis and my AI health coaching are completely free! If you would like a personalized nutrition club diet or one-on-one fitness coaching, our wellness coaches can share package details.";
+          answerPhonetic = answerDisplay;
+        }
       } else {
-        answerDisplay = "ActiveLife Wellness basic report analysis and my AI health coaching are completely free! If you would like a personalized nutrition club diet or one-on-one fitness coaching, our wellness coaches can share package details.";
-        answerPhonetic = answerDisplay;
+        const reportContext = analysis
+          ? `BMI: ${analysis.raw?.bmi || 35.1}, Visceral Fat: ${analysis.raw?.visceralFat || 15}, Body Fat: ${
+              analysis.raw?.bodyFat || 21.1
+            }%, Muscle: ${analysis.raw?.muscleMass || 21.8}kg, Water: ${analysis.raw?.bodyWater || 52}%`
+          : undefined;
+        answerDisplay = await sendDakshinMessage(trimmed, currentLang, reportContext);
+        answerPhonetic = currentLang === "te" ? transliterateTeluguToRoman(answerDisplay) : answerDisplay;
       }
-    } else {
-      const reportContext = analysis
-        ? `BMI: ${analysis.raw?.bmi || 35.1}, Visceral Fat: ${analysis.raw?.visceralFat || 15}, Body Fat: ${analysis.raw?.bodyFat || 21.1}%, Muscle: ${analysis.raw?.muscleMass || 21.8}kg, Water: ${analysis.raw?.bodyWater || 52}%`
-        : undefined;
-      answerDisplay = await sendDakshinMessage(trimmed, language, reportContext);
-      answerPhonetic = language === "te" ? transliterateTeluguToRoman(answerDisplay) : answerDisplay;
-    }
 
-    const robotMsg: RobotMessage = {
-      id: "robot-" + Date.now(),
-      role: "robot",
-      text: answerDisplay,
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    };
+      const robotMsg: RobotMessage = {
+        id: "robot-" + Date.now(),
+        role: "robot",
+        text: answerDisplay,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
 
-    setMessages((prev) => [...prev, robotMsg]);
-    setLoading(false);
+      setMessages((prev) => [...prev, robotMsg]);
+      setLoading(false);
 
-    // Dakshin speaks the answer aloud in trained female voice
-    speakFemaleVoice(answerDisplay, answerPhonetic, language);
-  };
+      // Dakshin speaks the answer aloud in trained female voice
+      speakFemaleVoice(answerDisplay, answerPhonetic, currentLang);
+    },
+    [loading, analysis, speakFemaleVoice]
+  );
+
+  // Keep handleUserDoubtRef synchronized
+  useEffect(() => {
+    handleUserDoubtRef.current = handleUserDoubt;
+  }, [handleUserDoubt]);
 
   if (!isOpen) return null;
 

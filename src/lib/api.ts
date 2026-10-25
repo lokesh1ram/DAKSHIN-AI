@@ -183,8 +183,21 @@ export function generateConciseDakshinReply(query: string, lang: SupportedLangua
 
   // Telugu (తెలుగు)
   if (lang === "te") {
-    if (q.includes("నమస్కా") || q.includes("హలో") || q.includes("ఎవరు") || q.includes("ఎలా ఉన్నావు") || q.includes("hello") || q.includes("hi")) {
-      return "నమస్కారం! నేను దక్షిణ్‌ని, మీ పర్సనల్ AI హెల్త్ అసిస్టెంట్‌ని. మీ BMI, రోజువారీ నడక, ఆహారపు అలవాట్లు, నీరు మరియు నిద్ర గురించి ఏ సందేహం ఉన్నా నన్ను అడగండి, నేను మాట్లాడుతాను!";
+    if (
+      q.includes("నమస్కా") ||
+      q.includes("హలో") ||
+      q.includes("ఎవరు") ||
+      q.includes("ఎలా") ||
+      q.includes("పేరు") ||
+      q.includes("లోకేష్") ||
+      q.includes("lokesh") ||
+      q.includes("naate") ||
+      q.includes("naa") ||
+      q.includes("hello") ||
+      q.includes("hi") ||
+      q.includes("hey")
+    ) {
+      return "నమస్కారం! నేను దక్షిణ్‌ని, మీ పర్సనల్ AI హెల్త్ అసిస్టెంట్‌ని. మీ BMI నివేదిక 35.1 మరియు విసెరల్ ఫ్యాట్ 15 గా ఉంది. ఆహారపు అలవాట్లు, రోజువారీ నడక, నీరు మరియు నిద్ర గురించి ఏ సందేహం ఉన్నా అడగండి, నేను మాట్లాడుతాను!";
     }
     if (q.includes("థాంక్స్") || q.includes("ధన్యవాదాలు") || q.includes("thank")) {
       return "చాలా సంతోషం! మీ ఆరోగ్యం ఎల్లప్పుడూ మెరుగ్గా ఉండాలని కోరుకుంటున్నాను. ఇంకేదైనా తెలుసుకోవాలనుకుంటే మైక్ ఆన్ చేసి అడగండి.";
@@ -192,7 +205,7 @@ export function generateConciseDakshinReply(query: string, lang: SupportedLangua
     if (q.includes("report") || q.includes("రిపోర్ట్") || q.includes("విశ్లేషణ") || q.includes("వివరించు") || q.includes("bmi") || q.includes("బిఎంఐ")) {
       return "మీ BMI నివేదికను విశ్లేషించాను. మీ బాడీ మాస్ ఇండెక్స్ 35.1 మరియు విసెరల్ ఫ్యాట్ 15 గా ఉంది, ఇది సాధారణ స్థాయి కంటే ఎక్కువ. మీ ఆరోగ్యం బాగుపడటానికి రోజూ 8,000 నుండి 10,000 అడుగులు నడవండి, పంచదార పూర్తిగా ఆపి 3.5 లీటర్ల నీరు త్రాగండి!";
     }
-    if (q.includes("diet") || q.includes("ఆహార") || q.includes("తినాలి") || q.includes("డైట్") || q.includes("ఫుడ్") || q.includes("స్వీట్")) {
+    if (q.includes("diet") || q.includes("ఆహార") || q.includes("తినాలి") || q.includes("డైట్") || q.includes("ఫుడ్") || q.includes("స్వీట్") || q.includes("తిండి")) {
       return "ఆహారంలో దోసకాయ, ఆకుకూరలు, పప్పులు, మొలకలు మరియు ప్రొటీన్ ఎక్కువగా ఉండేలా చూసుకోండి. వైట్ షుగర్, మైదా, డీప్ ఫ్రై చేసిన వేపుళ్ళు పూర్తిగా మానేయండి. రాత్రి 8 గంటల లోపే తేలికపాటి భోజనం ముగించండి!";
     }
     if (q.includes("step") || q.includes("walk") || q.includes("నడక") || q.includes("అడుగు") || q.includes("వాకింగ్") || q.includes("ఎక్సర్ సైజ్") || q.includes("వ్యాయామ")) {
@@ -201,7 +214,7 @@ export function generateConciseDakshinReply(query: string, lang: SupportedLangua
     if (q.includes("visceral") || q.includes("కొవ్వు") || q.includes("పొట్ట") || q.includes("ఫ్యాట్") || q.includes("బరువు")) {
       return "విసెరల్ ఫ్యాట్ అనేది కడుపు లోపల అవయవాల చుట్టూ ఉండే కొవ్వు. ఇది 9 లోపు ఉండాలి. రోజూ బ్రిస్క్ వాకింగ్, తీపి పదార్థాలు పూర్తిగా మానేయడం మరియు రాత్రి త్వరగా నిద్రపోవడం ద్వారా దీనిని తగ్గించవచ్చు!";
     }
-    if (q.includes("water") || q.includes("నీరు") || q.includes("మంచినీరు") || q.includes("హైడ్రేషన్")) {
+    if (q.includes("water") || q.includes("నీరు") || q.includes("మంచినీరు") || q.includes("హైడ్రేషన్") || q.includes("నీళ్ళు")) {
       return "మీ శరీరానికి రోజూ 3.5 నుండి 4 లీటర్ల మంచినీరు చాలా అవసరం. ఉదయం నిద్రలేవగానే 2 గ్లాసుల గోరువెచ్చని నీరు త్రాగడం జీర్ణక్రియను మరియు శరీర మెటబాలిజాన్ని వేగవంతం చేస్తుంది!";
     }
     if (q.includes("sleep") || q.includes("నిద్ర") || q.includes("పడుకో")) {
@@ -215,8 +228,19 @@ export function generateConciseDakshinReply(query: string, lang: SupportedLangua
 
   // Hindi (हिन्दी)
   if (lang === "hi") {
-    if (q.includes("नमस्ते") || q.includes("हेलो") || q.includes("कौन") || q.includes("कैसे हो") || q.includes("hello") || q.includes("hi")) {
-      return "नमस्ते! मैं दक्षिण हूँ, आपकी पर्सनल AI हेल्थ असिस्टेंट। आपकी BMI रिपोर्ट, वॉक, डाइट, पानी या नींद को लेकर जो भी सवाल हो, मुझसे सीधे पूछें!";
+    if (
+      q.includes("नमस्ते") ||
+      q.includes("हेलो") ||
+      q.includes("कौन") ||
+      q.includes("कैसे") ||
+      q.includes("नाम") ||
+      q.includes("लोकेश") ||
+      q.includes("lokesh") ||
+      q.includes("hello") ||
+      q.includes("hi") ||
+      q.includes("hey")
+    ) {
+      return "नमस्ते! मैं दक्षिण हूँ, आपकी पर्सनल AI हेल्थ असिस्टेंट। आपकी BMI रिपोर्ट 35.1 और विसरल फैट 15 है। डाइट, रोजाना 10,000 कदम वॉक, पानी या नींद से जुड़ा कोई भी सवाल हो, मुझसे सीधे पूछें!";
     }
     if (q.includes("धन्यवाद") || q.includes("शुक्रिया") || q.includes("thank")) {
       return "आपका स्वागत है! स्वस्थ जीवनशैली बनाए रखें। कुछ और पूछना हो तो माइक ऑन करके पूछ सकते हैं।";
