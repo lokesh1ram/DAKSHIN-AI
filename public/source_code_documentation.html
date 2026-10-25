@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ActiveLife Wellness & Dakshin AI · Source Code Documentation</title>
+  <style>
+    :root {
+      --primary: #50942A;
+      --primary-dark: #3E7320;
+      --accent: #EBF5E6;
+      --bg: #F8FAF7;
+      --text: #1E293B;
+      --card-bg: #FFFFFF;
+      --code-bg: #0F172A;
+      --border: #E2E8F0;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 0 0 60px 0;
+    }
+    .header {
+      background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
+      color: white;
+      padding: 40px 24px;
+      border-bottom: 4px solid var(--primary);
+    }
+    .header-content {
+      max-width: 1000px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    .title-area h1 {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .title-area p {
+      color: #94A3B8;
+      font-size: 14px;
+      margin-top: 6px;
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+    }
+    .btn {
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      border: none;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+    .container {
+      max-width: 1000px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 28px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+    }
+    h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #0F172A;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1E293B;
+      margin: 20px 0 10px 0;
+    }
+    p, li {
+      font-size: 14px;
+      color: #334155;
+      margin-bottom: 12px;
+    }
+    ul, ol {
+      margin-left: 20px;
+      margin-bottom: 16px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 13px;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      text-align: left;
+    }
+    th {
+      background: #F1F5F9;
+      color: #0F172A;
+      font-weight: 700;
+    }
+    tr:nth-child(even) {
+      background: #F8FAFC;
+    }
+    .code-container {
+      position: relative;
+      background: var(--code-bg);
+      border-radius: 12px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+    .code-header {
+      background: #1E293B;
+      color: #94A3B8;
+      font-size: 12px;
+      font-family: monospace;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #334155;
+    }
+    .copy-btn {
+      background: rgba(255, 255, 255, 0.1);
+      color: #E2E8F0;
+      border: none;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .copy-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+    pre {
+      padding: 18px;
+      overflow-x: auto;
+      font-family: Consolas, Monaco, "Courier New", monospace;
+      font-size: 13px;
+      color: #E2E8F0;
+      line-height: 1.5;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      background: var(--accent);
+      color: var(--primary-dark);
+    }
+    @media print {
+      .header {
+        background: white !important;
+        color: black !important;
+        padding: 20px 0;
+        border-bottom: 2px solid #333;
+      }
+      .actions, .copy-btn {
+        display: none !important;
+      }
+      body {
+        background: white;
+        color: black;
+      }
+      .card {
+        border: 1px solid #CCC;
+        box-shadow: none;
+        page-break-inside: avoid;
+      }
+      pre {
+        background: #F8FAFC !important;
+        color: #0F172A !important;
+        border: 1px solid #DDD;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <div class="header-content">
+      <div class="title-area">
+        <h1>
+          <span>🌿 ActiveLife Wellness Assistant AI</span>
+        </h1>
+        <p>Comprehensive Technical Source Code Documentation & Architecture Specifications</p>
+      </div>
+      <div class="actions">
+        <button onclick="window.print()" class="btn btn-primary">
+          🖨️ Print / Save to PDF
+        </button>
+        <a href="/ACTIVELIFE_WELLNESS_SOURCE_CODE_DOCUMENTATION.md" download class="btn btn-secondary">
+          ⬇️ Download Markdown (.md)
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Section 1: Executive Overview -->
+    <div class="card">
+      <h2>📌 1. Project Overview & Scope</h2>
+      <p>
+        <strong>ActiveLife Wellness Assistant AI</strong> is an anthropometric health evaluation and monitoring platform designed for modern wellness centers and personal health tracking. The system extracts and computes 14 anthropometric biomarkers (BMI, Visceral Fat, Body Fat %, Muscle Mass, Body Water %, BMR, Skeletal Muscle, Trunk Subcutaneous Fat, and Metabolic Age) and generates clinical PDF reports.
+      </p>
+      <p>
+        The platform features <strong>Dakshin AI</strong>, an interactive smart voice robot assistant trained in the style of <strong>Amazon Alexa, Google Assistant, "OK Google", and Gemini</strong>. Dakshin speaks aloud in three languages (<strong>English, Telugu, Hindi</strong>) and answers critical customer doubts regarding lifestyle habit transformations:
+      </p>
+      <ul>
+        <li><strong>Daily Step Count:</strong> BMI-tailored target of 8,000–10,000 daily steps to mobilize intra-abdominal fat.</li>
+        <li><strong>Food Habits:</strong> Fiber-first meal protocol, 25–30g clean protein per meal, zero refined white sugar and deep-fried snacks, and an 8:00 PM dinner deadline.</li>
+        <li><strong>Water Intake:</strong> Daily hydration protocol of 3.5 to 4.0 liters with 500ml warm water upon waking.</li>
+        <li><strong>Good Sleep:</strong> 7 to 8 hours of deep restorative sleep by 10:30 PM to suppress nocturnal cortisol and visceral belly fat storage.</li>
+        <li><strong>Reduce Visceral Fat:</strong> Actionable strategies to safely normalize organ fat levels below 9.</li>
+      </ul>
+    </div>
+
+    <!-- Section 2: Architecture & Tech Stack -->
+    <div class="card">
+      <h2>⚙️ 2. Technology Stack & Component Architecture</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Subsystem</th>
+            <th>Primary Technologies</th>
+            <th>Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Frontend</strong></td>
+            <td>React 18, TypeScript, Vite, TailwindCSS, Lucide-React</td>
+            <td>Single Page Application with rich clinical dashboard, evaluation sheet modal, and animated robot visuals.</td>
+          </tr>
+          <tr>
+            <td><strong>Voice Robot Engine</strong></td>
+            <td>Web Speech API (TTS + STT), Web Audio API (Oscillators)</td>
+            <td>Natural speech synthesis, speech recognition, mouth equalizer, and Alexa-style audio chimes.</td>
+          </tr>
+          <tr>
+            <td><strong>Backend REST API</strong></td>
+            <td>Node.js, Express.js, Multer (Memory Storage), CORS</td>
+            <td>Multipart form OCR image upload, manual value calculation, and multilingual habit reasoning.</td>
+          </tr>
+          <tr>
+            <td><strong>AI Inference</strong></td>
+            <td>Google Gemini 2.5 Flash, NLP fallback rule engine</td>
+            <td>Multimodal image analysis of paper sheets and multi-turn conversational habit counseling.</td>
+          </tr>
+          <tr>
+            <td><strong>Reporting</strong></td>
+            <td>jsPDF (Vectorized clinical report layout)</td>
+            <td>Client-side clinical PDF generation with biomarker tables and prescribed habit protocols.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Section 3: Dakshin Robot Implementation -->
+    <div class="card">
+      <h2>🤖 3. Core Module: Dakshin AI Voice Robot (`src/components/DakshinRobot.tsx`)</h2>
+      <p>
+        Implements the conversational smart speaker robot with dedicated ON/OFF control, animated mouth equalizer, dynamic robot avatar eyes, Web Speech synthesis with keep-alive, and habit doubt handlers.
+      </p>
+
+      <div class="code-container">
+        <div class="code-header">
+          <span>src/components/DakshinRobot.tsx</span>
+          <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('code-dakshin').innerText); this.innerText='Copied!'; setTimeout(()=>this.innerText='Copy', 2000)">Copy</button>
+        </div>
+        <pre><code id="code-dakshin">// Core Voice Assistant Execution & Habit Knowledge Engine
+export const DakshinRobot: React.FC&lt;DakshinRobotProps&gt; = ({
+  analysis,
+  user,
+  isOpen,
+  onToggle,
+  language,
+  onLanguageChange,
+}) =&gt; {
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [mouthEqualizer, setMouthEqualizer] = useState&lt;number[]&gt;([40, 70, 50, 90, 60]);
+  const [isMinimized, setIsMinimized] = useState(false);
+
+  // Keep-alive loop for Chrome's 15-second speech silence bug
+  useEffect(() =&gt; {
+    let interval: any;
+    if (isSpeaking) {
+      interval = setInterval(() =&gt; {
+        if (window.speechSynthesis &amp;&amp; window.speechSynthesis.speaking) {
+          window.speechSynthesis.pause();
+          window.speechSynthesis.resume();
+        }
+      }, 5000);
+    }
+    return () =&gt; clearInterval(interval);
+  }, [isSpeaking]);
+
+  // Initial Report Briefing in English, Telugu, or Hindi (Alexa / Google style)
+  const getInitialReportBriefing = (lang: DakshinLanguage) =&gt; {
+    const bmi = analysis?.raw?.bmi ?? 35.1;
+    const visceral = analysis?.raw?.visceralFat ?? 15;
+
+    if (lang === "te") {
+      return {
+        display: `నమస్కారం! నేను దక్షిణ్‌ని, మీ AI హెల్త్ రోబోట్‌ని! మీ BMI ${bmi} మరియు విసెరల్ ఫ్యాట్ ${visceral} గా ఉంది. 4 ముఖ్యమైన అలవాట్లు: 1. రోజూ 8,000-10,000 అడుగులు నడవండి. 2. ప్రొటీన్ ఆహారం తీసుకుని తీపి మానండి. 3. రోజూ 3.5 లీటర్ల నీరు త్రాగండి. 4. రాత్రి 10:30 కల్లా 7-8 గంటలు నిద్రపోండి!`,
+        phonetic: `Namaskaram! Nenu Dakshin-ni, mee AI health robot-ni! Mee BMI ${bmi} mariyu Visceral fat ${visceral} gaa undhi. 4 mukhyamaina alavaatlu: 1. Rojoo 8,000-10,000 adugulu nadavandi. 2. Protein aahaaram theesukoni theepi maanandi. 3. Rojoo 3.5 leetarla neeru thaagandi. 4. Raathri 10:30 kalla 7-8 gantalu nidrapondi!`,
+      };
+    }
+    // ... Returns Hindi and English equivalents
+  };
+};</code></pre>
+      </div>
+    </div>
+
+    <!-- Section 4: Evaluation Sheet Modal -->
+    <div class="card">
+      <h2>📋 4. Core Module: Evaluation Sheet Modal (`src/components/AddReportModal.tsx`)</h2>
+      <p>
+        The 14-biomarker evaluation form matching Screenshot 1 with camera/gallery file attachments, real-time BMI auto-calculation, and clinical validation.
+      </p>
+
+      <div class="code-container">
+        <div class="code-header">
+          <span>src/components/AddReportModal.tsx (BMI Formula Calculation)</span>
+          <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('code-modal').innerText); this.innerText='Copied!'; setTimeout(()=>this.innerText='Copy', 2000)">Copy</button>
+        </div>
+        <pre><code id="code-modal">// Real-time automatic BMI calculation
+const handleWeightChange = (val: string) =&gt; {
+  setWeight(val);
+  const w = parseFloat(val);
+  const h = parseFloat(height);
+  if (w &gt; 0 &amp;&amp; h &gt; 0) {
+    const calcBmi = (w / ((h / 100) * (h / 100))).toFixed(1);
+    setBmi(calcBmi);
+  }
+};</code></pre>
+      </div>
+    </div>
+
+    <!-- Section 5: Measurement History with Dakshin ON/OFF -->
+    <div class="card">
+      <h2>🕒 5. Core Module: Measurement History with Dedicated Dakshin ON/OFF (`src/pages/DashboardPage.tsx`)</h2>
+      <p>
+        Allows customers to analyze any past or present report by clicking a dedicated Dakshin ON/OFF button on each individual historical report card.
+      </p>
+
+      <div class="code-container">
+        <div class="code-header">
+          <span>src/pages/DashboardPage.tsx (History Mapping)</span>
+          <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('code-history').innerText); this.innerText='Copied!'; setTimeout(()=>this.innerText='Copy', 2000)">Copy</button>
+        </div>
+        <pre><code id="code-history">{history.map((item) =&gt; {
+  const isThisReportActive = isDakshinOpen &amp;&amp; analysis?.id === item.id;
+  return (
+    &lt;div key={item.id} className="report-card flex items-center justify-between"&gt;
+      &lt;div&gt;
+        &lt;span className="font-bold"&gt;{item.timestamp}&lt;/span&gt;
+        &lt;p&gt;BMI: {item.raw?.bmi} · Visceral: {item.raw?.visceralFat}&lt;/p&gt;
+      &lt;/div&gt;
+
+      {/* DEDICATED DAKSHIN ON/OFF BUTTON FOR THIS SPECIFIC REPORT */}
+      {isThisReportActive ? (
+        &lt;button onClick={() =&gt; setIsDakshinOpen(false)} className="bg-rose-600 text-white animate-pulse"&gt;
+          &lt;Power className="h-3.5 w-3.5" /&gt; Turn OFF Dakshin
+        &lt;/button&gt;
+      ) : (
+        &lt;button onClick={() =&gt; { setAnalysis(item); setIsDakshinOpen(true); }} className="bg-[#50942A] text-white"&gt;
+          &lt;Bot className="h-3.5 w-3.5" /&gt; Dakshin AI: ON
+        &lt;/button&gt;
+      )}
+    &lt;/div&gt;
+  );
+})}</code></pre>
+      </div>
+    </div>
+
+    <!-- Section 6: Mathematical Formulas -->
+    <div class="card">
+      <h2>📐 6. Anthropometric Mathematical Formulations</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Biomarker</th>
+            <th>Formula</th>
+            <th>Clinical Classification</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Body Mass Index (BMI)</strong></td>
+            <td><code>BMI = Weight(kg) / (Height(m))²</code></td>
+            <td>Normal: 18.5–24.9 | Overweight: 25.0–29.9 | Obese Class I: 30.0–34.9 | Obese Class II: &ge; 35.0</td>
+          </tr>
+          <tr>
+            <td><strong>Visceral Fat</strong></td>
+            <td>Bioelectrical Impedance / DEXA index (1 to 30)</td>
+            <td>Healthy: 1–9 | Borderline: 10–14 | Cardiovascular Risk: &ge; 15</td>
+          </tr>
+          <tr>
+            <td><strong>Body Water %</strong></td>
+            <td>Total Intracellular + Extracellular fluid %</td>
+            <td>Male: 50%–65% | Female: 45%–60%</td>
+          </tr>
+          <tr>
+            <td><strong>Basal Metabolic Rate</strong></td>
+            <td>Harris-Benedict equation based on gender, age & weight</td>
+            <td>Target daily baseline calorie burn required for homeostasis</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Section 7: REST API Endpoints -->
+    <div class="card">
+      <h2>🌐 7. REST API Endpoints Specification</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Endpoint</th>
+            <th>Request Body</th>
+            <th>Response</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>POST</code></td>
+            <td><code>/api/analyze-report</code></td>
+            <td><code>multipart/form-data</code> (image, age, gender)</td>
+            <td>Full JSON <code>HealthAnalysis</code> with OCR extracted values</td>
+          </tr>
+          <tr>
+            <td><code>POST</code></td>
+            <td><code>/api/analyze-values</code></td>
+            <td><code>application/json</code> (HealthReport data)</td>
+            <td>Computed diagnostics, positives, negatives, recommendations</td>
+          </tr>
+          <tr>
+            <td><code>POST</code></td>
+            <td><code>/api/chat</code></td>
+            <td><code>{ message, language, reportContext }</code></td>
+            <td>Concise spoken response from Dakshin AI in requested language</td>
+          </tr>
+          <tr>
+            <td><code>GET</code></td>
+            <td><code>/api/health</code></td>
+            <td>None</td>
+            <td>System health and status verification</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</body>
+</html>
