@@ -20,7 +20,7 @@ export const authService = {
       try {
         const { data, error } = await supabase.auth.signUp({
           email: profile.email,
-          password: profile.password || "password123",
+          password: profile.password || "",
           options: {
             data: {
               full_name: profile.fullName,
@@ -31,8 +31,14 @@ export const authService = {
           },
         });
         if (error) throw error;
+        if (!data.user || !data.session) {
+          return {
+            user: null,
+            error: "Check your email to confirm your account, then log in.",
+          };
+        }
         const user: UserProfile = {
-          id: data.user?.id || Date.now().toString(),
+          id: data.user.id,
           email: profile.email,
           fullName: profile.fullName,
           age: profile.age,
@@ -42,11 +48,10 @@ export const authService = {
         localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
         return { user, error: null };
       } catch (err: any) {
-        console.warn("Supabase auth error, falling back to local session:", err);
+        return { user: null, error: err.message || "Could not create your Supabase account." };
       }
     }
 
-    // Local session fallback
     const user: UserProfile = {
       id: Date.now().toString(),
       email: profile.email,
@@ -65,12 +70,15 @@ export const authService = {
       try {
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
-          password: password || "password123",
+          password: password || "",
         });
         if (error) throw error;
+        if (!data.user || !data.session) {
+          return { user: null, error: "Sign in did not return an authenticated session." };
+        }
         const meta = data.user?.user_metadata || {};
         const user: UserProfile = {
-          id: data.user?.id || Date.now().toString(),
+          id: data.user.id,
           email,
           fullName: meta.full_name || email.split("@")[0],
           age: meta.age || 30,
@@ -80,7 +88,7 @@ export const authService = {
         localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
         return { user, error: null };
       } catch (err: any) {
-        console.warn("Supabase login error, checking local session:", err);
+        return { user: null, error: err.message || "Could not sign in to Supabase." };
       }
     }
 
@@ -114,9 +122,12 @@ export const authService = {
           },
         });
         if (error) throw error;
-        return;
+        return { user: null, error: null };
       } catch (err) {
-        console.warn("Google OAuth error, using direct Google session:", err);
+        return {
+          user: null,
+          error: err instanceof Error ? err.message : "Could not sign in with Google.",
+        };
       }
     }
 
@@ -155,10 +166,52 @@ export const authService = {
   },
 };
 
+function getReportsStorageKey() {
+  const user = authService.getCurrentUser();
+  return `${STORAGE_KEY_REPORTS}:${user?.id || "guest"}`;
+}
+
+async function getCurrentAccessToken() {
+  if (!isSupabaseConfigured) return null;
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  return data.session?.access_token || null;
+}
+
+async function requestReportsApi(path: string, token: string, init?: RequestInit) {
+  let response: Response;
+  try {
+    response = await fetch(`/api/reports${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(init?.body ? { "Content-Type": "application/json" } : {}),
+        ...init?.headers,
+      },
+    });
+  } catch {
+    throw new Error("Cannot reach the report backend. Start the app with `npm run dev`.");
+  }
+
+  if (!response.ok) {
+    let message = "Could not complete the Supabase report request.";
+    try {
+      const body = await response.json();
+      if (typeof body.error === "string") message = body.error;
+    } catch {
+      // Keep the request error when the backend response is not JSON.
+    }
+    throw new Error(message);
+  }
+  if (response.status === 204) return null;
+  return response.json();
+}
+
 export const reportHistoryService = {
   getHistory: async (): Promise<HealthAnalysis[]> => {
     let localHistory: HealthAnalysis[] = [];
-    const saved = localStorage.getItem(STORAGE_KEY_REPORTS);
+    const storageKey = getReportsStorageKey();
+    const saved = localStorage.getItem(storageKey);
     if (saved) {
       try {
         localHistory = JSON.parse(saved);
@@ -167,82 +220,64 @@ export const reportHistoryService = {
       }
     }
 
-    if (isSupabaseConfigured) {
-      try {
-        const { data, error } = await supabase
-          .from("health_reports")
-          .select("*")
-          .order("created_at", { ascending: false });
-        if (error) throw error;
-        if (data) {
-          const remoteHistory: HealthAnalysis[] = data.map((d: any) => ({
-            id: d.id,
-            timestamp: new Date(d.created_at).toLocaleString(),
-            summary: d.summary,
-            overallStatus: d.overall_status,
-            metrics: d.metrics,
-            positives: d.positives || [],
-            negatives: d.negatives || [],
-            recommendations: d.recommendations || [],
-            raw: d.raw_values,
-            imageUrl: d.image_url,
-          }));
-          return [
-            ...localHistory,
-            ...remoteHistory.filter((report) => !localHistory.some((local) => local.id === report.id)),
-          ];
-        }
-      } catch (error) {
-        console.warn("Could not load reports from Supabase; using local report history.", error);
-      }
-    }
+    const token = await getCurrentAccessToken();
+    if (!token) return localHistory;
 
-    return localHistory;
+    const data = await requestReportsApi("", token) as Array<Record<string, any>>;
+    return data.map((report) => ({
+      id: String(report.id),
+      timestamp: new Date(report.created_at).toLocaleString(),
+      summary: report.summary,
+      overallStatus: report.overall_status,
+      metrics: report.metrics || [],
+      positives: report.positives || [],
+      negatives: report.negatives || [],
+      recommendations: report.recommendations || [],
+      raw: report.raw_values,
+    }));
   },
 
-  saveReport: async (report: HealthAnalysis): Promise<void> => {
-    const item: HealthAnalysis = {
+  saveReport: async (report: HealthAnalysis): Promise<HealthAnalysis> => {
+    const token = await getCurrentAccessToken();
+    if (token) {
+      const saved = await requestReportsApi("", token, {
+        method: "POST",
+        body: JSON.stringify(report),
+      });
+      return {
+        id: String(saved.id),
+        timestamp: new Date(saved.created_at).toLocaleString(),
+        summary: saved.summary,
+        overallStatus: saved.overall_status,
+        metrics: saved.metrics || [],
+        positives: saved.positives || [],
+        negatives: saved.negatives || [],
+        recommendations: saved.recommendations || [],
+        raw: saved.raw_values,
+      };
+    }
+
+    const item = {
       ...report,
       id: report.id || Date.now().toString(),
       timestamp: report.timestamp || new Date().toLocaleString(),
     };
-
-    if (isSupabaseConfigured) {
-      try {
-        const { data, error } = await supabase.from("health_reports").insert({
-          summary: item.summary,
-          overall_status: item.overallStatus,
-          metrics: item.metrics,
-          positives: item.positives,
-          negatives: item.negatives,
-          recommendations: item.recommendations,
-          raw_values: item.raw,
-          image_url: item.imageUrl,
-        }).select("id, created_at").single();
-        if (error) throw error;
-        if (data) {
-          item.id = data.id;
-          item.timestamp = new Date(data.created_at).toLocaleString();
-        }
-      } catch (error) {
-        console.warn("Could not save report to Supabase; saving it locally instead.", error);
-      }
-    }
-
+    const storageKey = getReportsStorageKey();
     const current = await reportHistoryService.getHistory();
     const updated = [item, ...current.filter((r) => r.id !== item.id)];
-    localStorage.setItem(STORAGE_KEY_REPORTS, JSON.stringify(updated.slice(0, 30)));
+    localStorage.setItem(storageKey, JSON.stringify(updated.slice(0, 30)));
+    return item;
   },
 
   deleteReport: async (id: string): Promise<void> => {
-    if (isSupabaseConfigured) {
-      try {
-        await supabase.from("health_reports").delete().eq("id", id);
-      } catch (e) {}
+    const token = await getCurrentAccessToken();
+    if (token) {
+      await requestReportsApi(`/${encodeURIComponent(id)}`, token, { method: "DELETE" });
+      return;
     }
 
     const current = await reportHistoryService.getHistory();
     const updated = current.filter((r) => r.id !== id);
-    localStorage.setItem(STORAGE_KEY_REPORTS, JSON.stringify(updated));
+    localStorage.setItem(getReportsStorageKey(), JSON.stringify(updated));
   },
 };

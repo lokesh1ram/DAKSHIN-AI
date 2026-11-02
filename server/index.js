@@ -9,6 +9,11 @@ import {
   chatWithDakshin,
   formatAnalysis,
 } from "./geminiService.js";
+import {
+  getSupabaseAdminClient,
+  requireSupabaseUser,
+  supabaseEnabled,
+} from "./supabaseService.js";
 
 dotenv.config();
 
@@ -35,8 +40,91 @@ app.get("/api/health", (req, res) => {
     app: "ActiveLife Wellness Assistant AI",
     version: "1.0.0",
     geminiEnabled: Boolean(process.env.GEMINI_API_KEY),
-    supabaseEnabled: Boolean(process.env.VITE_SUPABASE_URL),
+    supabaseEnabled,
   });
+});
+
+app.get("/api/reports", requireSupabaseUser, async (req, res) => {
+  try {
+    const { data, error } = await getSupabaseAdminClient()
+      .from("health_reports")
+      .select(
+        "id, created_at, summary, overall_status, metrics, positives, negatives, recommendations, raw_values"
+      )
+      .eq("user_id", req.supabaseUser.id)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    console.error("Error loading saved reports:", err);
+    res.status(500).json({ error: "Could not load saved reports from Supabase." });
+  }
+});
+
+app.post("/api/reports", requireSupabaseUser, async (req, res) => {
+  const report = req.body;
+  const validStatuses = ["good", "borderline", "at-risk"];
+  if (
+    !report ||
+    typeof report.summary !== "string" ||
+    !validStatuses.includes(report.overallStatus) ||
+    !Array.isArray(report.metrics) ||
+    !Array.isArray(report.positives) ||
+    !Array.isArray(report.negatives) ||
+    !Array.isArray(report.recommendations) ||
+    !report.raw ||
+    typeof report.raw !== "object" ||
+    Array.isArray(report.raw)
+  ) {
+    return res.status(400).json({ error: "The health report data is invalid." });
+  }
+
+  try {
+    const { data, error } = await getSupabaseAdminClient()
+      .from("health_reports")
+      .insert({
+        user_id: req.supabaseUser.id,
+        summary: report.summary,
+        overall_status: report.overallStatus,
+        metrics: report.metrics,
+        positives: report.positives,
+        negatives: report.negatives,
+        recommendations: report.recommendations,
+        raw_values: report.raw,
+      })
+      .select(
+        "id, created_at, summary, overall_status, metrics, positives, negatives, recommendations, raw_values"
+      )
+      .single();
+    if (error) throw error;
+    res.status(201).json(data);
+  } catch (err) {
+    console.error("Error saving report:", err);
+    res.status(500).json({ error: "Could not save the report to Supabase." });
+  }
+});
+
+app.delete("/api/reports/:id", requireSupabaseUser, async (req, res) => {
+  if (!req.params.id || req.params.id.length > 100) {
+    return res.status(400).json({ error: "The report ID is invalid." });
+  }
+
+  try {
+    const { data, error } = await getSupabaseAdminClient()
+      .from("health_reports")
+      .delete()
+      .eq("id", req.params.id)
+      .eq("user_id", req.supabaseUser.id)
+      .select("id");
+    if (error) throw error;
+    if (!data?.length) {
+      return res.status(404).json({ error: "Report not found." });
+    }
+    res.status(204).end();
+  } catch (err) {
+    console.error("Error deleting report:", err);
+    res.status(500).json({ error: "Could not delete the report from Supabase." });
+  }
 });
 
 // 1. Analyze Report from uploaded image (OCR via Gemini Vision)

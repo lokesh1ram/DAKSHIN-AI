@@ -10,9 +10,12 @@ if not exist node_modules (
     call npm.cmd install
 )
 
-if not exist dist (
-    echo Building frontend...
-    call npm.cmd run build
+echo Building frontend...
+call npm.cmd run build
+if errorlevel 1 (
+    echo [ERROR] Frontend build failed.
+    pause
+    exit /b 1
 )
 
 start "" http://localhost:5000

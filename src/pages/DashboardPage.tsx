@@ -37,6 +37,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate }
   const [isAddReportOpen, setIsAddReportOpen] = useState(false);
   const [analysis, setAnalysis] = useState<HealthAnalysis | null>(null);
   const [history, setHistory] = useState<HealthAnalysis[]>([]);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [isDakshinOpen, setIsDakshinOpen] = useState(false);
   const [dakshinLanguage, setDakshinLanguage] = useState<DakshinLanguage>("en");
   const [pdfGenerating, setPdfGenerating] = useState(false);
@@ -47,68 +48,22 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate }
   }, []);
 
   const loadHistory = async () => {
-    let data = await reportHistoryService.getHistory();
-    // If user has no historical reports yet, initialize with the baseline evaluation sheet from Screenshot 1 & 2
-    if (data.length === 0) {
-      const baselineReport: HealthAnalysis = {
-        id: "baseline-report-1",
-        timestamp: "Today, 10:30 AM",
-        summary:
-          "Comprehensive Body Composition Assessment indicates Class II Obesity (BMI 35.1) and elevated Visceral Fat (15). Priority lifestyle adjustments: Daily 8,000-10,000 steps, high-protein fiber-rich nutrition, 3.5L hydration, and 7-8 hours restful sleep.",
-        overallStatus: "at-risk",
-        metrics: [
-          { name: "BMI", value: 35.1, unit: "", status: "at-risk", healthyRange: "18.5 - 24.9", explanation: "Class II obesity range; prioritize daily brisk walking and fiber." },
-          { name: "Weight", value: 88.8, unit: "kg", status: "at-risk", healthyRange: "55 - 68 kg", explanation: "Target weight management with calorie awareness." },
-          { name: "Visceral Fat", value: 15, unit: "level", status: "at-risk", healthyRange: "< 9", explanation: "Elevated abdominal organ fat; requires aerobic cardio & low sugar." },
-          { name: "Body Fat", value: 21.1, unit: "%", status: "borderline", healthyRange: "18 - 28%", explanation: "Borderline range for female profile; manageable with diet." },
-          { name: "Muscle Mass", value: 21.8, unit: "kg", status: "good", healthyRange: "> 20 kg", explanation: "Healthy skeletal muscle supporting basal metabolism." },
-          { name: "Body Water", value: 52.0, unit: "%", status: "good", healthyRange: "50 - 65%", explanation: "Optimal cellular hydration percentage." },
-        ],
-        positives: [
-          "Healthy skeletal muscle mass (21.8 kg) supporting basal metabolic activity",
-          "Hydration percentage (52.0%) is within the optimal cellular threshold",
-        ],
-        negatives: [
-          "Visceral fat level (15) significantly exceeds the safe cardiovascular threshold of 9",
-          "BMI of 35.1 and body weight of 88.8 kg require structured physical & dietary protocol",
-        ],
-        recommendations: [
-          "Target 8,000 to 10,000 daily steps with 30-min morning walk & 20-min post-dinner stroll",
-          "Eat 25-30g protein with fresh greens per meal; eliminate refined white sugar & deep-fried foods",
-          "Drink 3.5 to 4.0 liters of water daily, starting with 500ml warm water upon waking",
-          "Sleep 7 to 8 hours by 10:30 PM to suppress evening cortisol and reduce visceral fat storage",
-        ],
-        raw: {
-          age: 28,
-          gender: "female",
-          weight: 88.8,
-          height: 170,
-          visceralFat: 15,
-          trunkSubFat: 18.2,
-          bodyFat: 21.1,
-          bodyAge: 34,
-          bmi: 35.1,
-          bmr: 1640,
-          skeletalMuscle: 29.5,
-          muscleMass: 21.8,
-          metabolicAge: 32,
-          bodyWater: 52.0,
-          boneMass: 3.2,
-        },
-      };
-      await reportHistoryService.saveReport(baselineReport);
-      data = [baselineReport];
-    }
-
-    setHistory(data);
-    if (data.length > 0 && !analysis) {
-      setAnalysis(data[0]);
+    try {
+      const data = await reportHistoryService.getHistory();
+      setHistoryError(null);
+      setHistory(data);
+      if (!analysis) setAnalysis(data[0] || null);
+    } catch (error) {
+      console.error("Could not load report history:", error);
+      setHistoryError(
+        error instanceof Error ? error.message : "Could not load reports from Supabase."
+      );
     }
   };
 
   const handleSaveReport = async (newAnalysis: HealthAnalysis) => {
-    setAnalysis(newAnalysis);
-    await reportHistoryService.saveReport(newAnalysis);
+    const savedReport = await reportHistoryService.saveReport(newAnalysis);
+    setAnalysis(savedReport);
     await loadHistory();
   };
 
@@ -223,6 +178,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate }
 
         {activeNavTab === "overview" && (
           <div className="space-y-5">
+            {historyError && (
+              <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+                {historyError}
+              </p>
+            )}
+
             {/* CARD 1: ADD A BODY INDEX REPORT (EXACT SCREENSHOT 2) */}
             <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -304,7 +265,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate }
                     <div className="p-3.5 rounded-2xl bg-[#F7F9F6] border border-slate-200/70">
                       <span className="text-[11px] font-semibold text-slate-500">Weight</span>
                       <div className="mt-1 flex items-baseline gap-1">
-                        <span className="text-xl font-bold text-slate-900">{analysis.raw?.weight || 88.8}</span>
+                        <span className="text-xl font-bold text-slate-900">{analysis.raw?.weight ?? "—"}</span>
                         <span className="text-[10px] text-slate-500">kg</span>
                       </div>
                     </div>
@@ -312,14 +273,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate }
                     <div className="p-3.5 rounded-2xl bg-[#F7F9F6] border border-slate-200/70">
                       <span className="text-[11px] font-semibold text-slate-500">BMI</span>
                       <div className="mt-1 flex items-baseline gap-1">
-                        <span className="text-xl font-bold text-slate-900">{analysis.raw?.bmi || 35.1}</span>
+                        <span className="text-xl font-bold text-slate-900">{analysis.raw?.bmi ?? "—"}</span>
                       </div>
                     </div>
 
                     <div className="p-3.5 rounded-2xl bg-[#F7F9F6] border border-slate-200/70">
                       <span className="text-[11px] font-semibold text-slate-500">Visceral Fat</span>
                       <div className="mt-1 flex items-baseline gap-1">
-                        <span className="text-xl font-bold text-slate-900">{analysis.raw?.visceralFat || 15}</span>
+                        <span className="text-xl font-bold text-slate-900">{analysis.raw?.visceralFat ?? "—"}</span>
                         <span className="text-[10px] text-slate-500">&lt; 9</span>
                       </div>
                     </div>
@@ -327,7 +288,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate }
                     <div className="p-3.5 rounded-2xl bg-[#F7F9F6] border border-slate-200/70">
                       <span className="text-[11px] font-semibold text-slate-500">Body Fat %</span>
                       <div className="mt-1 flex items-baseline gap-1">
-                        <span className="text-xl font-bold text-slate-900">{analysis.raw?.bodyFat || 21.1}</span>
+                        <span className="text-xl font-bold text-slate-900">{analysis.raw?.bodyFat ?? "—"}</span>
                         <span className="text-[10px] text-slate-500">%</span>
                       </div>
                     </div>
@@ -335,7 +296,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate }
                     <div className="p-3.5 rounded-2xl bg-[#F7F9F6] border border-slate-200/70">
                       <span className="text-[11px] font-semibold text-slate-500">Muscle Mass</span>
                       <div className="mt-1 flex items-baseline gap-1">
-                        <span className="text-xl font-bold text-slate-900">{analysis.raw?.muscleMass || 21.8}</span>
+                        <span className="text-xl font-bold text-slate-900">{analysis.raw?.muscleMass ?? "—"}</span>
                         <span className="text-[10px] text-slate-500">kg</span>
                       </div>
                     </div>
@@ -343,7 +304,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user, onNavigate }
                     <div className="p-3.5 rounded-2xl bg-[#F7F9F6] border border-slate-200/70">
                       <span className="text-[11px] font-semibold text-slate-500">Body Water</span>
                       <div className="mt-1 flex items-baseline gap-1">
-                        <span className="text-xl font-bold text-slate-900">{analysis.raw?.bodyWater || 52.0}</span>
+                        <span className="text-xl font-bold text-slate-900">{analysis.raw?.bodyWater ?? "—"}</span>
                         <span className="text-[10px] text-slate-500">%</span>
                       </div>
                     </div>

@@ -17,15 +17,20 @@ export async function analyzeReportImage(
   formData.append("age", String(age));
   formData.append("gender", gender);
 
-  const res = await fetch(`${API_BASE}/analyze-report`, {
-    method: "POST",
-    body: formData,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/analyze-report`, {
+      method: "POST",
+      body: formData,
+    });
+  } catch {
+    throw new Error("OCR backend is not running. Start the app with `npm run dev` and try again.");
+  }
   let data: { error?: string; extractedValues?: ReportImageExtraction["extractedValues"] };
   try {
     data = await res.json();
   } catch {
-    throw new Error("OCR service could not be reached. Start the backend and try again.");
+    throw new Error("OCR backend returned an invalid response. Restart the app with `npm run dev`.");
   }
   if (!res.ok) {
     throw new Error(data.error || "Could not extract measurements from the image.");

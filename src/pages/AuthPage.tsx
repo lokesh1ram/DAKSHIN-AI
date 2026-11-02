@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { authService } from "@/lib/supabase";
+import type { UserProfile } from "@/types/health";
 
 interface AuthPageProps {
   onNavigate: (page: "landing" | "auth" | "dashboard") => void;
-  onLoginSuccess: (user: any) => void;
+  onLoginSuccess: (user: UserProfile) => void;
 }
 
 export const AuthPage: React.FC<AuthPageProps> = ({ onNavigate, onLoginSuccess }) => {
@@ -12,42 +13,75 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onNavigate, onLoginSuccess }
   const [age, setAge] = useState(28);
   const [height, setHeight] = useState(170);
   const [gender, setGender] = useState("female");
-  const [email, setEmail] = useState("lokesh.k0206@gmail.com");
-  const [password, setPassword] = useState("••••••••");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { user } = await authService.signUp({
-      email,
-      password,
-      fullName: fullName || "Lokesh K",
-      age: Number(age) || 28,
-      height: Number(height) || 170,
-      gender,
-    });
-    setLoading(false);
-    onLoginSuccess(user);
-    onNavigate("dashboard");
+    setAuthError(null);
+    try {
+      const { user, error } = await authService.signUp({
+        email,
+        password,
+        fullName,
+        age: Number(age) || 28,
+        height: Number(height) || 170,
+        gender,
+      });
+      if (error || !user) {
+        setAuthError(error || "Could not create your account.");
+        return;
+      }
+      onLoginSuccess(user);
+      onNavigate("dashboard");
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Could not create your account.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { user } = await authService.signIn(email, password);
-    setLoading(false);
-    onLoginSuccess(user);
-    onNavigate("dashboard");
+    setAuthError(null);
+    try {
+      const { user, error } = await authService.signIn(email, password);
+      if (error || !user) {
+        const message = error || "Could not sign in.";
+        setAuthError(
+          message.toLowerCase().includes("invalid login credentials")
+            ? "No account matches this email and password. Sign up first, or check your password."
+            : message
+        );
+        return;
+      }
+      onLoginSuccess(user);
+      onNavigate("dashboard");
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Could not sign in.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleGoogleAuth = async () => {
     setLoading(true);
-    const res = await authService.signInWithGoogle();
-    setLoading(false);
-    if (res?.user) {
-      onLoginSuccess(res.user);
-      onNavigate("dashboard");
+    setAuthError(null);
+    try {
+      const res = await authService.signInWithGoogle();
+      if (res?.error) setAuthError(res.error);
+      if (res?.user) {
+        onLoginSuccess(res.user);
+        onNavigate("dashboard");
+      }
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Could not sign in with Google.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -76,26 +110,31 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onNavigate, onLoginSuccess }
         <div className="mt-5 grid grid-cols-3 rounded-lg bg-slate-100 p-1 text-center text-xs font-semibold text-slate-600">
           <button
             type="button"
-            onClick={() => setTab("login")}
+            onClick={() => { setTab("login"); setAuthError(null); }}
             className={`rounded-md py-2 transition-all ${tab === "login" ? "bg-white text-slate-900 shadow-sm" : "hover:text-slate-900"}`}
           >
             Log in
           </button>
           <button
             type="button"
-            onClick={() => setTab("signup")}
+            onClick={() => { setTab("signup"); setAuthError(null); }}
             className={`rounded-md py-2 transition-all ${tab === "signup" ? "bg-white text-slate-900 shadow-sm" : "hover:text-slate-900"}`}
           >
             Sign up
           </button>
           <button
             type="button"
-            onClick={() => setTab("forgot")}
+            onClick={() => { setTab("forgot"); setAuthError(null); }}
             className={`rounded-md py-2 transition-all ${tab === "forgot" ? "bg-white text-slate-900 shadow-sm" : "hover:text-slate-900"}`}
           >
             Forgot?
           </button>
         </div>
+        {authError && (
+          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
+            {authError}
+          </p>
+        )}
 
         {/* Sign Up Form */}
         {tab === "signup" && (
@@ -105,6 +144,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onNavigate, onLoginSuccess }
               <input
                 type="text"
                 placeholder="Your name"
+                required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-600 focus:outline-none focus:ring-1 focus:ring-emerald-600"
@@ -249,6 +289,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onNavigate, onLoginSuccess }
         <button
           type="button"
           onClick={handleGoogleAuth}
+          disabled={loading}
           className="flex w-full items-center justify-center gap-2.5 rounded-lg border border-slate-200 bg-white py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
         >
           <svg className="h-4 w-4" viewBox="0 0 24 24">
