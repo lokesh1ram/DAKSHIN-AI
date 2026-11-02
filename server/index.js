@@ -49,21 +49,22 @@ app.post("/api/analyze-report", upload.single("image"), async (req, res) => {
       return res.status(400).json({ error: "No image file uploaded." });
     }
 
-    const result = await extractReportFromImage(
+    const extractedValues = await extractReportFromImage(
       req.file.buffer,
       req.file.mimetype,
       age,
       gender
     );
 
-    // Attach data preview url for UI
-    const base64 = req.file.buffer.toString("base64");
-    result.imageUrl = `data:${req.file.mimetype};base64,${base64}`;
-
-    res.json(result);
+    res.json({ extractedValues });
   } catch (err) {
     console.error("Error analyzing report image:", err);
-    res.status(500).json({ error: "Failed to analyze report image." });
+    res.status(err.statusCode || 502).json({
+      error:
+        err.statusCode === 503
+          ? err.message
+          : err.message || "Failed to extract measurements from the image.",
+    });
   }
 });
 

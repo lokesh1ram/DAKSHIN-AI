@@ -8,33 +8,38 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API
  */
 export async function extractReportFromImage(imageBuffer, mimeType, age, gender) {
   if (!GEMINI_API_KEY) {
-    console.log("No GEMINI_API_KEY provided; using deterministic clinical extraction fallback.");
-    return generateFallbackExtraction(age, gender);
+    const error = new Error(
+      "OCR is unavailable. Configure GEMINI_API_KEY in the backend environment."
+    );
+    error.statusCode = 503;
+    throw error;
   }
 
-  const prompt = `You are an expert clinical health report analyzer. Extract the handwritten or printed values from this BMI / Nutrition Club Evaluation report image.
-Target person: ${age} years old, ${gender}.
-Extract these numeric values:
-- weight (kg)
-- bmi
-- bodyFat (%)
-- muscleMass (kg)
-- bodyWater (%)
-- visceralFat (number)
-
-Return ONLY a valid JSON object in this exact schema without markdown backticks:
+  const prompt = `Read the printed or handwritten body-composition measurements in this report image.
+The person's profile is ${age} years old and ${gender}; do not use profile values as a substitute for values printed on the report.
+Return a number for each clearly readable measurement and null when it is missing or unreadable.
+Use these units: weight/height in kg/cm, body-fat and body-water in percent, muscle/bone mass in kg, and ages in years.
+Return ONLY a valid JSON object without markdown:
 {
-  "weight": number,
-  "bmi": number,
-  "bodyFat": number,
-  "muscleMass": number,
-  "bodyWater": number,
-  "visceralFat": number
+  "weight": number|null,
+  "height": number|null,
+  "visceralFat": number|null,
+  "trunkSubFat": number|null,
+  "bodyFat": number|null,
+  "bodyAge": number|null,
+  "age": number|null,
+  "bmi": number|null,
+  "bmr": number|null,
+  "skeletalMuscle": number|null,
+  "muscleMass": number|null,
+  "metabolicAge": number|null,
+  "bodyWater": number|null,
+  "boneMass": number|null
 }`;
 
   try {
     const base64Data = imageBuffer.toString("base64");
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
     const res = await fetch(endpoint, {
       method: "POST",
@@ -60,24 +65,37 @@ Return ONLY a valid JSON object in this exact schema without markdown backticks:
       }),
     });
 
-    if (!res.ok) throw new Error(`Gemini API error: ${res.statusText}`);
+    if (!res.ok) throw new Error(`Gemini API returned status ${res.status}.`);
     const data = await res.json();
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
     const parsed = JSON.parse(rawText.replace(/```json/g, "").replace(/```/g, "").trim());
+    const fields = [
+      "weight",
+      "height",
+      "visceralFat",
+      "trunkSubFat",
+      "bodyFat",
+      "bodyAge",
+      "age",
+      "bmi",
+      "bmr",
+      "skeletalMuscle",
+      "muscleMass",
+      "metabolicAge",
+      "bodyWater",
+      "boneMass",
+    ];
 
-    return formatAnalysis({
-      age: Number(age) || 30,
-      gender: gender || "female",
-      weight: parsed.weight || 88.8,
-      bmi: parsed.bmi || 35.1,
-      bodyFat: parsed.bodyFat || 21.1,
-      muscleMass: parsed.muscleMass || 21.8,
-      bodyWater: parsed.bodyWater || 52.0,
-      visceralFat: parsed.visceralFat || 15.0,
-    });
+    return fields.reduce((measurements, field) => {
+      const value = parsed[field];
+      if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+        measurements[field] = value;
+      }
+      return measurements;
+    }, {});
   } catch (err) {
     console.error("Gemini Vision extraction error:", err);
-    return generateFallbackExtraction(age, gender);
+    throw new Error("OCR could not read the image. Try a clearer photo or enter the values manually.");
   }
 }
 
@@ -225,20 +243,6 @@ function classify(value, min, max) {
   if (value < min * 0.9 || value > max * 1.15) return "at-risk";
   if (value < min || value > max) return "borderline";
   return "good";
-}
-
-function generateFallbackExtraction(age, gender) {
-  const fallbackReport = {
-    age: Number(age) || 30,
-    gender: gender || "female",
-    weight: 88.8,
-    bmi: 35.1,
-    bodyFat: 21.1,
-    muscleMass: 21.8,
-    bodyWater: 52.0,
-    visceralFat: 15.0,
-  };
-  return formatAnalysis(fallbackReport);
 }
 
 function generateFallbackChatReply(query, lang, reportContext) {

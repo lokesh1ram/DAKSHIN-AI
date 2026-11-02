@@ -1,44 +1,39 @@
-import type { HealthAnalysis, HealthReport, SupportedLanguage } from "@/types/health";
+import type {
+  HealthAnalysis,
+  HealthReport,
+  ReportImageExtraction,
+  SupportedLanguage,
+} from "@/types/health";
 
 const API_BASE = "/api";
 
-export async function analyzeReportImage(file: File, age: number, gender: string): Promise<HealthAnalysis> {
+export async function analyzeReportImage(
+  file: File,
+  age: number,
+  gender: string
+): Promise<ReportImageExtraction> {
   const formData = new FormData();
   formData.append("image", file);
   formData.append("age", String(age));
   formData.append("gender", gender);
 
+  const res = await fetch(`${API_BASE}/analyze-report`, {
+    method: "POST",
+    body: formData,
+  });
+  let data: { error?: string; extractedValues?: ReportImageExtraction["extractedValues"] };
   try {
-    const res = await fetch(`${API_BASE}/analyze-report`, {
-      method: "POST",
-      body: formData,
-    });
-    if (!res.ok) throw new Error("Backend OCR failed");
-    return await res.json();
-  } catch (err) {
-    console.warn("Backend analysis unavailable, using local OCR calculation fallback:", err);
-    // Convert image to data url for preview
-    const previewUrl = await new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.readAsDataURL(file);
-    });
-
-    // Realistic evaluation form extraction matching Screenshot 1
-    const extractedReport: HealthReport = {
-      age,
-      gender: gender as any,
-      weight: 88.8,
-      bmi: 35.1,
-      bodyFat: 21.1,
-      muscleMass: 21.8,
-      bodyWater: 52.0,
-      visceralFat: 15.0,
-    };
-    const analysis = generateLocalAnalysis(extractedReport);
-    analysis.imageUrl = previewUrl;
-    return analysis;
+    data = await res.json();
+  } catch {
+    throw new Error("OCR service could not be reached. Start the backend and try again.");
   }
+  if (!res.ok) {
+    throw new Error(data.error || "Could not extract measurements from the image.");
+  }
+  if (!data.extractedValues || typeof data.extractedValues !== "object") {
+    throw new Error("OCR returned no measurements. Try a clearer photo or enter values manually.");
+  }
+  return { extractedValues: data.extractedValues };
 }
 
 export async function analyzeReportValues(report: HealthReport): Promise<HealthAnalysis> {

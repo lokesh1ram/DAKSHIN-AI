@@ -157,14 +157,25 @@ export const authService = {
 
 export const reportHistoryService = {
   getHistory: async (): Promise<HealthAnalysis[]> => {
+    let localHistory: HealthAnalysis[] = [];
+    const saved = localStorage.getItem(STORAGE_KEY_REPORTS);
+    if (saved) {
+      try {
+        localHistory = JSON.parse(saved);
+      } catch {
+        localHistory = [];
+      }
+    }
+
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabase
           .from("health_reports")
           .select("*")
           .order("created_at", { ascending: false });
-        if (!error && data && data.length > 0) {
-          return data.map((d: any) => ({
+        if (error) throw error;
+        if (data) {
+          const remoteHistory: HealthAnalysis[] = data.map((d: any) => ({
             id: d.id,
             timestamp: new Date(d.created_at).toLocaleString(),
             summary: d.summary,
@@ -176,20 +187,17 @@ export const reportHistoryService = {
             raw: d.raw_values,
             imageUrl: d.image_url,
           }));
+          return [
+            ...localHistory,
+            ...remoteHistory.filter((report) => !localHistory.some((local) => local.id === report.id)),
+          ];
         }
-      } catch (e) {}
-    }
-
-    // Local storage fallback
-    const saved = localStorage.getItem(STORAGE_KEY_REPORTS);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        return [];
+      } catch (error) {
+        console.warn("Could not load reports from Supabase; using local report history.", error);
       }
     }
-    return [];
+
+    return localHistory;
   },
 
   saveReport: async (report: HealthAnalysis): Promise<void> => {
@@ -201,7 +209,7 @@ export const reportHistoryService = {
 
     if (isSupabaseConfigured) {
       try {
-        await supabase.from("health_reports").insert({
+        const { data, error } = await supabase.from("health_reports").insert({
           summary: item.summary,
           overall_status: item.overallStatus,
           metrics: item.metrics,
@@ -210,11 +218,17 @@ export const reportHistoryService = {
           recommendations: item.recommendations,
           raw_values: item.raw,
           image_url: item.imageUrl,
-        });
-      } catch (e) {}
+        }).select("id, created_at").single();
+        if (error) throw error;
+        if (data) {
+          item.id = data.id;
+          item.timestamp = new Date(data.created_at).toLocaleString();
+        }
+      } catch (error) {
+        console.warn("Could not save report to Supabase; saving it locally instead.", error);
+      }
     }
 
-    // Save to local storage
     const current = await reportHistoryService.getHistory();
     const updated = [item, ...current.filter((r) => r.id !== item.id)];
     localStorage.setItem(STORAGE_KEY_REPORTS, JSON.stringify(updated.slice(0, 30)));

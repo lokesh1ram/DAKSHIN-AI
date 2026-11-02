@@ -44,6 +44,10 @@ export interface HealthAnalysis {
   imageUrl?: string;
 }
 
+export interface ReportImageExtraction {
+  extractedValues: Partial<HealthReport>;
+}
+
 export type SupportedLanguage = "en" | "te" | "hi" | "ta";
 
 export const LANGUAGE_LABELS: Record<SupportedLanguage, string> = {

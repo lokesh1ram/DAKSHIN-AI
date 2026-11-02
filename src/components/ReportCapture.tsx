@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import { Camera, FileText, RotateCcw, Sparkles, Upload } from "lucide-react";
 import type { Gender, HealthAnalysis, HealthReport } from "@/types/health";
-import { analyzeReportImage, analyzeReportValues } from "@/lib/api";
+import { analyzeReportImage, analyzeReportValues, generateLocalAnalysis } from "@/lib/api";
 
 interface ReportCaptureProps {
   initialAge: number;
@@ -20,6 +20,7 @@ export const ReportCapture: React.FC<ReportCaptureProps> = ({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Manual entry states
   const [manualValues, setManualValues] = useState<HealthReport>({
@@ -41,12 +42,14 @@ export const ReportCapture: React.FC<ReportCaptureProps> = ({
       setSelectedFile(file);
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
+      setError(null);
     }
   };
 
   const handleClearImage = () => {
     setSelectedFile(null);
     setPreviewUrl(null);
+    setError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -54,16 +57,17 @@ export const ReportCapture: React.FC<ReportCaptureProps> = ({
     setLoading(true);
     try {
       if (activeTab === "upload") {
-        if (selectedFile) {
-          const result = await analyzeReportImage(selectedFile, age, gender);
-          onAnalysisComplete(result);
-        } else {
-          // If no image attached yet, analyze with default sample evaluation sheet
-          const sampleBlob = new Blob(["sample"], { type: "image/jpeg" });
-          const dummyFile = new File([sampleBlob], "evaluation-sheet.jpg", { type: "image/jpeg" });
-          const result = await analyzeReportImage(dummyFile, age, gender);
-          onAnalysisComplete(result);
+        if (!selectedFile) {
+          throw new Error("Choose a report image before starting OCR.");
         }
+        const extraction = await analyzeReportImage(selectedFile, age, gender);
+        const result = generateLocalAnalysis({
+          ...manualValues,
+          ...extraction.extractedValues,
+          age,
+          gender,
+        });
+        onAnalysisComplete(result);
       } else {
         const result = await analyzeReportValues({
           ...manualValues,
@@ -73,15 +77,10 @@ export const ReportCapture: React.FC<ReportCaptureProps> = ({
         onAnalysisComplete(result);
       }
     } catch (e) {
-      console.error("Analysis failed:", e);
+      setError(e instanceof Error ? e.message : "Analysis failed. Please try again.");
     } finally {
       setLoading(false);
     }
-  };
-
-  // Demo auto-load evaluation sheet if user clicks
-  const loadDemoEvaluationSheet = () => {
-    setPreviewUrl("https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&q=80&w=800");
   };
 
   return (
@@ -174,16 +173,6 @@ export const ReportCapture: React.FC<ReportCaptureProps> = ({
               </div>
               <p className="mt-3 text-sm font-semibold text-slate-800">Click to upload or take a photo</p>
               <p className="mt-1 text-xs text-slate-500">Supports Nutrition Club sheets, InBody, Omron, Tanita reports (JPEG, PNG)</p>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  loadDemoEvaluationSheet();
-                }}
-                className="mt-3 text-[11px] font-semibold text-emerald-700 underline"
-              >
-                Load sample evaluation sheet
-              </button>
             </div>
           )}
 
@@ -196,6 +185,7 @@ export const ReportCapture: React.FC<ReportCaptureProps> = ({
             <Sparkles className="h-4 w-4" />
             {loading ? "Analyzing Report..." : "Analyze My Report"}
           </button>
+          {error && <p className="text-xs font-medium text-red-600" role="alert">{error}</p>}
         </div>
       )}
 
@@ -272,6 +262,7 @@ export const ReportCapture: React.FC<ReportCaptureProps> = ({
             <Sparkles className="h-4 w-4" />
             {loading ? "Analyzing Values..." : "Analyze My Report"}
           </button>
+          {error && <p className="text-xs font-medium text-red-600" role="alert">{error}</p>}
         </div>
       )}
     </div>
